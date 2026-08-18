@@ -1,0 +1,151 @@
+{
+  "job_id": "4bc049d7",
+  "input": {
+    "app_url": "https://apps.apple.com/cn/app/%E7%8E%8B%E8%80%85%E8%8D%A3%E8%80%80/id989673964#productRatings",
+    "app_id": "989673964",
+    "analysis_goal": "Improve the app based on user feedback",
+    "uploaded_file": null,
+    "use_cache": true,
+    "offline_mode": false
+  },
+  "stages": [
+    {
+      "stage": "scope",
+      "status": "completed",
+      "message": "Scope defined for app 989673964",
+      "result": {
+        "app_id": "989673964",
+        "analysis_goal": "Improve the app based on user feedback",
+        "mode": "rss"
+      },
+      "started_at": "2026-08-16T10:00:28.919463",
+      "completed_at": "2026-08-16T10:00:28.924189"
+    },
+    {
+      "stage": "collect",
+      "status": "completed",
+      "message": "Collected 0 reviews",
+      "result": {
+        "review_count": 0,
+        "source": "rss"
+      },
+      "started_at": "2026-08-16T10:00:28.982140",
+      "completed_at": "2026-08-16T10:00:29.746010"
+    },
+    {
+      "stage": "clean",
+      "status": "completed",
+      "message": "Cleaned to 0 reviews",
+      "result": {
+        "review_count_after_clean": 0,
+        "removed_count": 0
+      },
+      "started_at": "2026-08-16T10:00:29.807963",
+      "completed_at": "2026-08-16T10:00:29.808963"
+    },
+    {
+      "stage": "classify",
+      "status": "completed",
+      "message": "Discovered 0 topics",
+      "result": {
+        "topic_count": 0
+      },
+      "started_at": "2026-08-16T10:00:29.870645",
+      "completed_at": "2026-08-16T10:00:29.873253"
+    },
+    {
+      "stage": "evaluate",
+      "status": "completed",
+      "message": "Generated 0 findings",
+      "result": {
+        "finding_count": 0
+      },
+      "started_at": "2026-08-16T10:00:29.933704",
+      "completed_at": "2026-08-16T10:00:33.161781"
+    },
+    {
+      "stage": "plan",
+      "status": "completed",
+      "message": "Planned 0 versions",
+      "result": {
+        "version_count": 0
+      },
+      "started_at": "2026-08-16T10:00:33.229652",
+      "completed_at": "2026-08-16T10:00:33.233999"
+    },
+    {
+      "stage": "prd",
+      "status": "completed",
+      "message": "Generated 0 requirements",
+      "result": {
+        "requirement_count": 0
+      },
+      "started_at": "2026-08-16T10:00:33.290021",
+      "completed_at": "2026-08-16T10:00:41.849906"
+    },
+    {
+      "stage": "testgen",
+      "status": "completed",
+      "message": "Generated 0 test cases",
+      "result": {
+        "test_case_count": 0
+      },
+      "started_at": "2026-08-16T10:00:41.913314",
+      "completed_at": "2026-08-16T10:00:47.206318"
+    },
+    {
+      "stage": "validate",
+      "status": "completed",
+      "message": "Validation: 0 issues",
+      "result": {
+        "valid": true,
+        "issue_count": 0,
+        "insufficient_evidence": [],
+        "orphan_requirements": [],
+        "orphan_test_cases": [],
+        "link_count": 0
+      },
+      "started_at": "2026-08-16T10:00:47.272866",
+      "completed_at": "2026-08-16T10:00:47.276364"
+    },
+    {
+      "stage": "present",
+      "status": "completed",
+      "message": "Report ready",
+      "result": {
+        "review_count": 0,
+        "topic_count": 0,
+        "finding_count": 0,
+        "requirement_count": 0,
+        "test_case_count": 0,
+        "valid": true,
+        "issue_count": 0
+      },
+      "started_at": "2026-08-16T10:00:47.335792",
+      "completed_at": "2026-08-16T10:00:47.337612"
+    }
+  ],
+  "current_stage_index": 9,
+  "reviews": [],
+  "topics": [],
+  "findings": [],
+  "version_plan": [],
+  "prd": {
+    "app_id": "989673964",
+    "analysis_goal": "Improve the app based on user feedback",
+    "version_plan": []
+  },
+  "test_cases": [],
+  "trace_links": [],
+  "validation_report": {
+    "valid": true,
+    "issue_count": 0,
+    "insufficient_evidence": [],
+    "orphan_requirements": [],
+    "orphan_test_cases": [],
+    "link_count": 0
+  },
+  "created_at": "2026-08-16T10:00:28.919437",
+  "updated_at": "2026-08-16T10:00:28.919440",
+  "error": null
+}

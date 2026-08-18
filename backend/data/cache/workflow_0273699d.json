@@ -1,0 +1,117 @@
+{
+  "job_id": "0273699d",
+  "input": {
+    "app_url": null,
+    "app_id": "324684580",
+    "analysis_goal": "test",
+    "uploaded_file": null,
+    "use_cache": true,
+    "offline_mode": false
+  },
+  "stages": [
+    {
+      "stage": "scope",
+      "status": "completed",
+      "message": "Scope defined for app 324684580",
+      "result": {
+        "app_id": "324684580",
+        "analysis_goal": "test",
+        "mode": "rss"
+      },
+      "started_at": "2026-08-16T08:44:20.048255",
+      "completed_at": "2026-08-16T08:44:20.049805"
+    },
+    {
+      "stage": "collect",
+      "status": "completed",
+      "message": "Collected 0 reviews",
+      "result": {
+        "review_count": 0,
+        "source": "rss"
+      },
+      "started_at": "2026-08-16T08:44:20.102106",
+      "completed_at": "2026-08-16T08:44:20.788908"
+    },
+    {
+      "stage": "clean",
+      "status": "completed",
+      "message": "Cleaned to 0 reviews",
+      "result": {
+        "review_count_after_clean": 0,
+        "removed_count": 0
+      },
+      "started_at": "2026-08-16T08:44:20.844285",
+      "completed_at": "2026-08-16T08:44:20.845016"
+    },
+    {
+      "stage": "classify",
+      "status": "completed",
+      "message": "Discovered 0 topics",
+      "result": {
+        "topic_count": 0
+      },
+      "started_at": "2026-08-16T08:44:20.906753",
+      "completed_at": "2026-08-16T08:44:21.005203"
+    },
+    {
+      "stage": "evaluate",
+      "status": "failed",
+      "message": "LLM call failed after 3 attempts: Error code: 401 - {'error': {'message': 'Incorrect API key provided: dummy. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_api_key'}}",
+      "result": {},
+      "started_at": "2026-08-16T08:44:21.061636",
+      "completed_at": "2026-08-16T08:44:23.476967"
+    },
+    {
+      "stage": "plan",
+      "status": "pending",
+      "message": "",
+      "result": {},
+      "started_at": null,
+      "completed_at": null
+    },
+    {
+      "stage": "prd",
+      "status": "pending",
+      "message": "",
+      "result": {},
+      "started_at": null,
+      "completed_at": null
+    },
+    {
+      "stage": "testgen",
+      "status": "pending",
+      "message": "",
+      "result": {},
+      "started_at": null,
+      "completed_at": null
+    },
+    {
+      "stage": "validate",
+      "status": "pending",
+      "message": "",
+      "result": {},
+      "started_at": null,
+      "completed_at": null
+    },
+    {
+      "stage": "present",
+      "status": "pending",
+      "message": "",
+      "result": {},
+      "started_at": null,
+      "completed_at": null
+    }
+  ],
+  "current_stage_index": 4,
+  "reviews": [],
+  "topics": [],
+  "findings": [],
+  "version_plan": [],
+  "prd": {},
+  "test_cases": [],
+  "trace_links": [],
+  "validation_report": {},
+  "created_at": "2026-08-16T08:44:20.048211",
+  "updated_at": "2026-08-16T08:44:20.048214",
+  "error": "LLM call failed after 3 attempts: Error code: 401 - {'error': {'message': 'Incorrect API key provided: dummy. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_api_key'}}"
+}

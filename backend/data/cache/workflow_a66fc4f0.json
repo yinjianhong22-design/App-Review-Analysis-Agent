@@ -1,0 +1,105 @@
+{
+  "job_id": "a66fc4f0",
+  "input": {
+    "app_url": "https://apps.apple.com/cn/iphone/apps",
+    "app_id": null,
+    "analysis_goal": "Improve the app based on user feedback",
+    "uploaded_file": null,
+    "use_cache": true,
+    "offline_mode": false
+  },
+  "stages": [
+    {
+      "stage": "scope",
+      "status": "failed",
+      "message": "Could not extract app_id from URL and no file provided",
+      "result": {},
+      "started_at": "2026-08-16T10:11:12.446103",
+      "completed_at": "2026-08-16T10:11:12.449098"
+    },
+    {
+      "stage": "collect",
+      "status": "pending",
+      "message": "",
+      "result": {},
+      "started_at": null,
+      "completed_at": null
+    },
+    {
+      "stage": "clean",
+      "status": "pending",
+      "message": "",
+      "result": {},
+      "started_at": null,
+      "completed_at": null
+    },
+    {
+      "stage": "classify",
+      "status": "pending",
+      "message": "",
+      "result": {},
+      "started_at": null,
+      "completed_at": null
+    },
+    {
+      "stage": "evaluate",
+      "status": "pending",
+      "message": "",
+      "result": {},
+      "started_at": null,
+      "completed_at": null
+    },
+    {
+      "stage": "plan",
+      "status": "pending",
+      "message": "",
+      "result": {},
+      "started_at": null,
+      "completed_at": null
+    },
+    {
+      "stage": "prd",
+      "status": "pending",
+      "message": "",
+      "result": {},
+      "started_at": null,
+      "completed_at": null
+    },
+    {
+      "stage": "testgen",
+      "status": "pending",
+      "message": "",
+      "result": {},
+      "started_at": null,
+      "completed_at": null
+    },
+    {
+      "stage": "validate",
+      "status": "pending",
+      "message": "",
+      "result": {},
+      "started_at": null,
+      "completed_at": null
+    },
+    {
+      "stage": "present",
+      "status": "pending",
+      "message": "",
+      "result": {},
+      "started_at": null,
+      "completed_at": null
+    }
+  ],
+  "current_stage_index": 0,
+  "reviews": [],
+  "topics": [],
+  "findings": [],
+  "version_plan": [],
+  "prd": {},
+  "test_cases": [],
+  "trace_links": [],
+  "validation_report": {},
+  "created_at": "2026-08-16T10:11:12.446085",
+  "updated_at": "2026-08-16T10:11:12.446088",
+  "error": "Could not extract app_id from URL and no file provided"
+}

@@ -1,0 +1,109 @@
+{
+  "job_id": "844b3641",
+  "input": {
+    "app_url": null,
+    "app_id": null,
+    "analysis_goal": "Improve subscription clarity",
+    "uploaded_file": "data/uploads/52ab8ce081d141c28f6b93ad05aee331.json",
+    "use_cache": true,
+    "offline_mode": true
+  },
+  "stages": [
+    {
+      "stage": "scope",
+      "status": "completed",
+      "message": "Scope defined for app None",
+      "result": {
+        "app_id": null,
+        "analysis_goal": "Improve subscription clarity",
+        "mode": "offline"
+      },
+      "started_at": "2026-08-16T09:02:22.625919",
+      "completed_at": "2026-08-16T09:02:22.628269"
+    },
+    {
+      "stage": "collect",
+      "status": "failed",
+      "message": "app.models.schemas.Review() got multiple values for keyword argument 'source'",
+      "result": {},
+      "started_at": "2026-08-16T09:02:22.679918",
+      "completed_at": "2026-08-16T09:02:22.681256"
+    },
+    {
+      "stage": "clean",
+      "status": "pending",
+      "message": "",
+      "result": {},
+      "started_at": null,
+      "completed_at": null
+    },
+    {
+      "stage": "classify",
+      "status": "pending",
+      "message": "",
+      "result": {},
+      "started_at": null,
+      "completed_at": null
+    },
+    {
+      "stage": "evaluate",
+      "status": "pending",
+      "message": "",
+      "result": {},
+      "started_at": null,
+      "completed_at": null
+    },
+    {
+      "stage": "plan",
+      "status": "pending",
+      "message": "",
+      "result": {},
+      "started_at": null,
+      "completed_at": null
+    },
+    {
+      "stage": "prd",
+      "status": "pending",
+      "message": "",
+      "result": {},
+      "started_at": null,
+      "completed_at": null
+    },
+    {
+      "stage": "testgen",
+      "status": "pending",
+      "message": "",
+      "result": {},
+      "started_at": null,
+      "completed_at": null
+    },
+    {
+      "stage": "validate",
+      "status": "pending",
+      "message": "",
+      "result": {},
+      "started_at": null,
+      "completed_at": null
+    },
+    {
+      "stage": "present",
+      "status": "pending",
+      "message": "",
+      "result": {},
+      "started_at": null,
+      "completed_at": null
+    }
+  ],
+  "current_stage_index": 1,
+  "reviews": [],
+  "topics": [],
+  "findings": [],
+  "version_plan": [],
+  "prd": {},
+  "test_cases": [],
+  "trace_links": [],
+  "validation_report": {},
+  "created_at": "2026-08-16T09:02:22.625878",
+  "updated_at": "2026-08-16T09:02:22.625880",
+  "error": "app.models.schemas.Review() got multiple values for keyword argument 'source'"
+}

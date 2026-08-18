@@ -1,0 +1,256 @@
+{
+  "job_id": "b95e56dc",
+  "input": {
+    "app_url": null,
+    "app_id": null,
+    "analysis_goal": "Improve subscription clarity",
+    "uploaded_file": "data/uploads/52ab8ce081d141c28f6b93ad05aee331.json",
+    "use_cache": true,
+    "offline_mode": true
+  },
+  "stages": [
+    {
+      "stage": "scope",
+      "status": "completed",
+      "message": "Scope defined for app None",
+      "result": {
+        "app_id": null,
+        "analysis_goal": "Improve subscription clarity",
+        "mode": "offline"
+      },
+      "started_at": "2026-08-16T09:03:49.907829",
+      "completed_at": "2026-08-16T09:03:49.909310"
+    },
+    {
+      "stage": "collect",
+      "status": "completed",
+      "message": "Collected 10 reviews",
+      "result": {
+        "review_count": 10,
+        "source": "upload"
+      },
+      "started_at": "2026-08-16T09:03:49.974590",
+      "completed_at": "2026-08-16T09:03:49.976103"
+    },
+    {
+      "stage": "clean",
+      "status": "completed",
+      "message": "Cleaned to 10 reviews",
+      "result": {
+        "review_count_after_clean": 10,
+        "removed_count": 0
+      },
+      "started_at": "2026-08-16T09:03:50.035699",
+      "completed_at": "2026-08-16T09:03:50.038735"
+    },
+    {
+      "stage": "classify",
+      "status": "failed",
+      "message": "LLM call failed after 3 attempts: Error code: 401 - {'error': {'message': 'Incorrect API key provided: dummy. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_api_key'}}",
+      "result": {},
+      "started_at": "2026-08-16T09:03:50.097694",
+      "completed_at": "2026-08-16T09:03:52.390159"
+    },
+    {
+      "stage": "evaluate",
+      "status": "pending",
+      "message": "",
+      "result": {},
+      "started_at": null,
+      "completed_at": null
+    },
+    {
+      "stage": "plan",
+      "status": "pending",
+      "message": "",
+      "result": {},
+      "started_at": null,
+      "completed_at": null
+    },
+    {
+      "stage": "prd",
+      "status": "pending",
+      "message": "",
+      "result": {},
+      "started_at": null,
+      "completed_at": null
+    },
+    {
+      "stage": "testgen",
+      "status": "pending",
+      "message": "",
+      "result": {},
+      "started_at": null,
+      "completed_at": null
+    },
+    {
+      "stage": "validate",
+      "status": "pending",
+      "message": "",
+      "result": {},
+      "started_at": null,
+      "completed_at": null
+    },
+    {
+      "stage": "present",
+      "status": "pending",
+      "message": "",
+      "result": {},
+      "started_at": null,
+      "completed_at": null
+    }
+  ],
+  "current_stage_index": 3,
+  "reviews": [
+    {
+      "review_id": "R-APP-00000001",
+      "author": "user_001",
+      "rating": 2,
+      "version": "2.1.0",
+      "date": "2024-01-15T10:00:00Z",
+      "title": "Charged without warning",
+      "content": "I signed up for the free trial and was charged before it ended. There was no clear notice about the renewal date or price. Very frustrating.",
+      "source": "json_upload",
+      "page": null,
+      "sort": null,
+      "app_id": null,
+      "extra": {}
+    },
+    {
+      "review_id": "R-APP-00000002",
+      "author": "user_002",
+      "rating": 3,
+      "version": "2.1.0",
+      "date": "2024-01-16T12:30:00Z",
+      "title": "Good app but pricing confusing",
+      "content": "The app itself is great, but I can't tell which plan I need. The comparison table is hidden behind a tooltip.",
+      "source": "json_upload",
+      "page": null,
+      "sort": null,
+      "app_id": null,
+      "extra": {}
+    },
+    {
+      "review_id": "R-APP-00000003",
+      "author": "user_003",
+      "rating": 1,
+      "version": "2.0.5",
+      "date": "2024-01-17T08:15:00Z",
+      "title": "Subscription nightmare",
+      "content": "I wanted to cancel but couldn't find the button. Ended up paying for another month. The subscription screen is a nightmare.",
+      "source": "json_upload",
+      "page": null,
+      "sort": null,
+      "app_id": null,
+      "extra": {}
+    },
+    {
+      "review_id": "R-APP-00000004",
+      "author": "user_004",
+      "rating": 5,
+      "version": "2.1.0",
+      "date": "2024-01-18T14:00:00Z",
+      "title": "Love it",
+      "content": "Works perfectly for my daily workouts. The new tracking feature is amazing.",
+      "source": "json_upload",
+      "page": null,
+      "sort": null,
+      "app_id": null,
+      "extra": {}
+    },
+    {
+      "review_id": "R-APP-00000005",
+      "author": "user_005",
+      "rating": 4,
+      "version": "2.1.0",
+      "date": "2024-01-19T09:45:00Z",
+      "title": "Sync issues with watch",
+      "content": "Sometimes the heart rate data from my watch doesn't sync until I restart the app. Please fix this.",
+      "source": "json_upload",
+      "page": null,
+      "sort": null,
+      "app_id": null,
+      "extra": {}
+    },
+    {
+      "review_id": "R-APP-00000006",
+      "author": "user_006",
+      "rating": 2,
+      "version": "2.0.5",
+      "date": "2024-01-20T11:20:00Z",
+      "title": "Too expensive",
+      "content": "Compared to competitors, the subscription is too expensive for what it offers. I might switch.",
+      "source": "json_upload",
+      "page": null,
+      "sort": null,
+      "app_id": null,
+      "extra": {}
+    },
+    {
+      "review_id": "R-APP-00000007",
+      "author": "user_007",
+      "rating": 3,
+      "version": "2.1.0",
+      "date": "2024-01-21T16:00:00Z",
+      "title": "Cancel button missing",
+      "content": "Where is the cancel subscription button? I looked in settings and account but couldn't find it.",
+      "source": "json_upload",
+      "page": null,
+      "sort": null,
+      "app_id": null,
+      "extra": {}
+    },
+    {
+      "review_id": "R-APP-00000008",
+      "author": "user_008",
+      "rating": 5,
+      "version": "2.1.0",
+      "date": "2024-01-22T13:10:00Z",
+      "title": "Pricing is clear to me",
+      "content": "I read the subscription terms and the price is clearly shown. No surprises.",
+      "source": "json_upload",
+      "page": null,
+      "sort": null,
+      "app_id": null,
+      "extra": {}
+    },
+    {
+      "review_id": "R-APP-00000009",
+      "author": "user_009",
+      "rating": 2,
+      "version": "2.0.5",
+      "date": "2024-01-23T07:50:00Z",
+      "title": "Trial ended too soon",
+      "content": "My trial ended after 5 days instead of 7. The app says 7-day trial but I was charged early.",
+      "source": "json_upload",
+      "page": null,
+      "sort": null,
+      "app_id": null,
+      "extra": {}
+    },
+    {
+      "review_id": "R-APP-00000010",
+      "author": "user_010",
+      "rating": 4,
+      "version": "2.1.0",
+      "date": "2024-01-24T19:30:00Z",
+      "title": "Great but needs better onboarding",
+      "content": "The first launch experience is overwhelming. Too many permission prompts before I can try anything.",
+      "source": "json_upload",
+      "page": null,
+      "sort": null,
+      "app_id": null,
+      "extra": {}
+    }
+  ],
+  "topics": [],
+  "findings": [],
+  "version_plan": [],
+  "prd": {},
+  "test_cases": [],
+  "trace_links": [],
+  "validation_report": {},
+  "created_at": "2026-08-16T09:03:49.907744",
+  "updated_at": "2026-08-16T09:03:49.907747",
+  "error": "LLM call failed after 3 attempts: Error code: 401 - {'error': {'message': 'Incorrect API key provided: dummy. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_api_key'}}"
+}
