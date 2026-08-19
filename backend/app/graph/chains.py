@@ -272,6 +272,13 @@ async def generate_prd(user_goal: str, app_id: str, findings: List[Dict[str, Any
     return await _call_json(system, user, max_tokens=12000)
 
 
+async def generate_test_cases(prd: Dict[str, Any], findings: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    system = _load_prompt("testgen_v1.0.txt")
+    user = json.dumps({"prd": prd, "findings": findings}, ensure_ascii=False)
+    result = await _call_json(system, user, max_tokens=12000)
+    return result.get("test_cases", [])
+
+
 async def generate_summary(prd: Dict[str, Any], findings: List[Dict[str, Any]], user_goal: str) -> str:
     system = (
         "You are a product analyst. Summarize the analysis results in 3-5 concise paragraphs. "

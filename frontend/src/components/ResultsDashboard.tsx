@@ -5,11 +5,12 @@ const TABS = [
   { id: 'overview', label: 'Summary' },
   { id: 'findings', label: 'Findings' },
   { id: 'prd', label: 'PRD' },
+  { id: 'testcases', label: 'Test Cases' },
   { id: 'reviews', label: 'Reviews' },
 ]
 
 export default function ResultsDashboard() {
-  const { result, activeTab, setActiveTab } = useWorkflowStore()
+  const { result, activeTab, setActiveTab, exportReport } = useWorkflowStore()
 
   if (!result) {
     return (
@@ -22,24 +23,41 @@ export default function ResultsDashboard() {
   const findings = result.findings || []
   const versionPlan = result.prd?.version_plan || result.version_plan || []
   const requirements = versionPlan.flatMap((vp: any) => vp.requirements || [])
+  const testCases = result.test_cases || []
   const hypothesisCount = findings.filter((f: any) => f.is_hypothesis).length
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-2">
-        {TABS.map((tab) => (
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2">
+        <div className="flex flex-wrap gap-2">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-3 py-1 text-sm rounded-t-md transition ${
+                activeTab === tab.id
+                  ? 'bg-blue-600 text-white'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-2">
           <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`px-3 py-1 text-sm rounded-t-md transition ${
-              activeTab === tab.id
-                ? 'bg-blue-600 text-white'
-                : 'text-slate-600 hover:bg-slate-100'
-            }`}
+            onClick={() => exportReport('prd_doc')}
+            className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700"
           >
-            {tab.label}
+            Download PRD
           </button>
-        ))}
+          <button
+            onClick={() => exportReport('test_cases_doc')}
+            className="px-3 py-1 text-sm bg-purple-600 text-white rounded hover:bg-purple-700"
+          >
+            Download Test Cases
+          </button>
+        </div>
       </div>
 
       {activeTab === 'overview' && (
@@ -51,7 +69,7 @@ export default function ResultsDashboard() {
                 {result.summary || 'Summary will appear here after analysis completes.'}
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div className="card text-center">
                 <div className="text-2xl font-bold text-blue-600">{result.cleaned_reviews?.length || 0}</div>
                 <div className="text-xs text-slate-500">Reviews</div>
@@ -63,6 +81,10 @@ export default function ResultsDashboard() {
               <div className="card text-center">
                 <div className="text-2xl font-bold text-green-600">{requirements.length}</div>
                 <div className="text-xs text-slate-500">Requirements</div>
+              </div>
+              <div className="card text-center">
+                <div className="text-2xl font-bold text-purple-600">{testCases.length}</div>
+                <div className="text-xs text-slate-500">Test Cases</div>
               </div>
             </div>
             {hypothesisCount > 0 && (
@@ -149,6 +171,46 @@ export default function ResultsDashboard() {
                   </div>
                 ))}
               </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {activeTab === 'testcases' && (
+        <div className="space-y-3">
+          <h3 className="font-semibold">Test Cases ({testCases.length})</h3>
+          {testCases.length === 0 && <p className="text-sm text-slate-500">No test cases generated yet.</p>}
+          {testCases.map((tc: any) => (
+            <div key={tc.tc_id} className="card border-l-4 border-l-purple-500">
+              <div className="flex justify-between items-start">
+                <h4 className="font-medium">{tc.tc_id}: {tc.title}</h4>
+                <div className="flex gap-2">
+                  <span className="text-xs bg-slate-100 px-2 py-0.5 rounded">{tc.test_type}</span>
+                  <span className="text-xs bg-slate-100 px-2 py-0.5 rounded">{tc.priority}</span>
+                </div>
+              </div>
+              <div className="text-xs text-slate-500 mt-1">
+                Requirement: <b>{tc.req_id}</b>
+              </div>
+              {tc.description && (
+                <p className="text-sm text-slate-700 mt-2">{tc.description}</p>
+              )}
+              <div className="mt-2">
+                <p className="text-xs font-medium text-slate-600">Steps:</p>
+                <ol className="list-decimal list-inside text-sm text-slate-700">
+                  {tc.steps?.map((step: string, idx: number) => (
+                    <li key={idx}>{step}</li>
+                  ))}
+                </ol>
+              </div>
+              <div className="mt-2 text-sm text-slate-700">
+                <span className="font-medium">Expected:</span> {tc.expected_result}
+              </div>
+              {tc.source_reviews?.length > 0 && (
+                <div className="mt-2 text-xs text-slate-500">
+                  Source reviews: {tc.source_reviews.join(', ')}
+                </div>
+              )}
             </div>
           ))}
         </div>

@@ -1,6 +1,6 @@
 from typing import Dict, Any, List
 
-from app.graph.state import PipelineState, ReviewItem, Finding, Requirement, VersionPlan, ValidationIssue
+from app.graph.state import PipelineState, ReviewItem, Finding, Requirement, VersionPlan, ValidationIssue, TestCase
 from app.graph import chains
 from app.services.data_collection import AppStoreRSSCollector, FileCollector
 from app.services.cleaning import CleaningService
@@ -118,6 +118,19 @@ async def prd_node(state: PipelineState) -> Dict[str, Any]:
         return {"error": f"prd failed: {e}"}
 
 
+async def testgen_node(state: PipelineState) -> Dict[str, Any]:
+    _log(state, "Generating test cases...")
+    try:
+        test_cases_data = await chains.generate_test_cases(
+            state.prd,
+            [f.model_dump(mode="json") for f in state.findings],
+        )
+        test_cases = [TestCase(**tc) for tc in test_cases_data]
+        return {"stage": "testgen", "test_cases": test_cases}
+    except Exception as e:
+        return {"error": f"testgen failed: {e}"}
+
+
 async def verify_node(state: PipelineState) -> Dict[str, Any]:
     _log(state, "Verifying traceability...")
     issues: List[ValidationIssue] = []
@@ -142,6 +155,18 @@ async def verify_node(state: PipelineState) -> Dict[str, Any]:
         invalid = [rid for rid in f.evidence_ids if rid not in review_ids]
         if invalid:
             issues.append(ValidationIssue(type="invalid_evidence", item_id=f.finding_id, message=f"Evidence not found: {invalid}"))
+
+    # Verify test cases link to requirements and reviews
+    req_ids = set()
+    for vp in state.version_plan:
+        for req in vp.requirements:
+            req_ids.add(req.req_id)
+    for tc in state.test_cases:
+        if tc.req_id not in req_ids:
+            issues.append(ValidationIssue(type="missing_requirement", item_id=tc.tc_id, message=f"Requirement {tc.req_id} not found"))
+        invalid_reviews = [rid for rid in tc.source_reviews if rid not in review_ids]
+        if invalid_reviews:
+            issues.append(ValidationIssue(type="invalid_tc_review", item_id=tc.tc_id, message=f"Reviews not found: {invalid_reviews}"))
 
     if not issues:
         status = "PASSED"

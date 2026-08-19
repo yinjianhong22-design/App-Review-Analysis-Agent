@@ -8,8 +8,9 @@ const STAGE_LABELS: Record<string, string> = {
   evaluate: '5. Evaluate',
   plan: '6. Plan',
   prd: '7. PRD',
-  validate: '8. Validate',
-  present: '9. Report',
+  testgen: '8. Test Cases',
+  validate: '9. Validate',
+  present: '10. Report',
 }
 
 export default function StageNavigator() {

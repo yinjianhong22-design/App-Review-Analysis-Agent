@@ -38,6 +38,18 @@ export interface VersionPlan {
   requirements: Requirement[]
 }
 
+export interface TestCase {
+  tc_id: string
+  req_id: string
+  title: string
+  description: string
+  steps: string[]
+  expected_result: string
+  source_reviews: string[]
+  test_type: string
+  priority: string
+}
+
 export interface Stage {
   stage: string
   status: 'pending' | 'running' | 'completed' | 'failed'
@@ -66,6 +78,7 @@ export interface AnalysisResult {
     analysis_goal: string
     version_plan: VersionPlan[]
   }
+  test_cases: TestCase[]
   summary: string
   validation_status: string
   validation_issues: any[]

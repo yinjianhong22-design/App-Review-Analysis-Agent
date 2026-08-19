@@ -23,6 +23,7 @@ interface WorkflowState {
   fetchStatus: (jobId: string) => Promise<void>
   fetchResult: (jobId: string) => Promise<void>
   sendChatMessage: (content: string) => Promise<void>
+  exportReport: (format: string) => Promise<void>
   stopPolling: () => void
   reset: () => void
 }
@@ -121,6 +122,31 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       set({ chatMessages: [...newMessages, { role: 'assistant', content: data.answer }], chatLoading: false })
     } catch (err) {
       set({ chatMessages: [...newMessages, { role: 'assistant', content: `Error: ${err}` }], chatLoading: false })
+    }
+  },
+
+  exportReport: async (format: string) => {
+    const { jobId } = get()
+    if (!jobId) return
+    try {
+      const res = await fetch(`${API_BASE}/api/export`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job_id: jobId, format }),
+      })
+      if (!res.ok) throw new Error(await res.text())
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const filename = res.headers.get('content-disposition')?.split('filename=')[1] || `export_${format}.md`
+      a.download = filename.replace(/"/g, '')
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      set({ error: String(err) })
     }
   },
 

@@ -44,6 +44,18 @@ class VersionPlan(BaseModel):
     requirements: List[Requirement] = Field(default_factory=list)
 
 
+class TestCase(BaseModel):
+    tc_id: str
+    req_id: str
+    title: str
+    description: str = ""
+    steps: List[str] = Field(default_factory=list)
+    expected_result: str = ""
+    source_reviews: List[str] = Field(default_factory=list)
+    test_type: str = "functional"  # functional / usability / regression / performance
+    priority: str = "P1"
+
+
 class ValidationIssue(BaseModel):
     type: str
     item_id: Optional[str] = None
@@ -61,6 +73,7 @@ class PipelineState(BaseModel):
     findings: List[Finding] = Field(default_factory=list)
     version_plan: List[VersionPlan] = Field(default_factory=list)
     prd: Dict[str, Any] = Field(default_factory=dict)
+    test_cases: List[TestCase] = Field(default_factory=list)
     summary: str = ""
     validation_status: str = "PENDING"
     validation_issues: List[ValidationIssue] = Field(default_factory=list)

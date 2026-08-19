@@ -64,6 +64,7 @@ STAGES = [
     ("evaluate", "Findings generated"),
     ("plan", "Versions planned"),
     ("prd", "PRD generated"),
+    ("testgen", "Test cases generated"),
     ("validate", "Traceability validated"),
     ("present", "Report ready"),
 ]
@@ -72,7 +73,7 @@ STAGES = [
 def _build_stages(state) -> List[Dict[str, Any]]:
     if isinstance(state, dict):
         state = PipelineState(**state)
-    stage_order = ["scope", "collect", "clean", "classify", "evaluate", "plan", "prd", "validate", "present"]
+    stage_order = ["scope", "collect", "clean", "classify", "evaluate", "plan", "prd", "testgen", "validate", "present"]
     current_stage = state.stage or "pending"
     current_idx = stage_order.index(current_stage) if current_stage in stage_order else -1
     stages = []
@@ -203,7 +204,7 @@ async def export_report(req: ExportRequest):
         state = PipelineState(**state)
     exporter = ExportService()
     output_path = await exporter.export(state, req.format)
-    if req.format == "markdown":
+    if req.format in ("markdown", "prd_doc", "test_cases_doc"):
         media_type = "text/markdown"
     elif req.format == "json":
         media_type = "application/json"

@@ -9,6 +9,7 @@ from app.graph.nodes import (
     evaluate_node,
     plan_node,
     prd_node,
+    testgen_node,
     verify_node,
     present_node,
 )
@@ -38,6 +39,7 @@ def build_workflow():
     workflow.add_node("evaluate", evaluate_node)
     workflow.add_node("plan", plan_node)
     workflow.add_node("prd", prd_node)
+    workflow.add_node("testgen", testgen_node)
     workflow.add_node("verify", verify_node)
     workflow.add_node("present", present_node)
 
@@ -49,7 +51,8 @@ def build_workflow():
         ("classify", "evaluate"),
         ("evaluate", "plan"),
         ("plan", "prd"),
-        ("prd", "verify"),
+        ("prd", "testgen"),
+        ("testgen", "verify"),
     ]:
         workflow.add_conditional_edges(
             node,

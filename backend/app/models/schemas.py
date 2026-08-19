@@ -108,4 +108,4 @@ class WorkflowStatusResponse(BaseModel):
 
 class ExportRequest(BaseModel):
     job_id: str
-    format: Literal["markdown", "json", "csv"]
+    format: Literal["markdown", "json", "csv", "prd_doc", "test_cases_doc"]
