@@ -3,7 +3,7 @@ import os
 from typing import Type, List, Dict, Any, Optional
 
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from pydantic import BaseModel
 
 from app.config import get_settings
@@ -165,10 +165,99 @@ async def classify_reviews(reviews: List[Dict[str, Any]], user_goal: str) -> Dic
     return {"topics": global_topics, "classifications": all_classifications}
 
 
-async def evaluate_findings(topics: List[Dict[str, Any]], classifications: List[Dict[str, Any]], reviews: List[Dict[str, Any]]) -> Dict[str, Any]:
+# Cap reviews per topic to keep each evaluate call small and fast.
+EVALUATE_MAX_REVIEWS_PER_TOPIC = 80
+
+
+async def _evaluate_single_topic(
+    topic: Dict[str, Any],
+    topic_reviews: List[Dict[str, Any]],
+    classification_lookup: Dict[str, Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    """Generate one finding for a single topic using only its relevant reviews."""
+    if not topic_reviews:
+        return None
+
     system = _load_prompt("evaluate_v1.0.txt")
-    user = json.dumps({"topics": topics, "classifications": classifications, "reviews": reviews}, ensure_ascii=False)
-    return await _call_json(system, user, max_tokens=16000)
+
+    # Sort by confidence if available so the strongest evidence is included first
+    def _confidence(r: Dict[str, Any]) -> float:
+        c = classification_lookup.get(r.get("review_id", ""), {})
+        return float(c.get("confidence", 0) or 0)
+
+    topic_reviews = sorted(topic_reviews, key=_confidence, reverse=True)
+    topic_reviews = topic_reviews[:EVALUATE_MAX_REVIEWS_PER_TOPIC]
+
+    topic_classifications = []
+    for r in topic_reviews:
+        c = classification_lookup.get(r.get("review_id", ""))
+        if c:
+            topic_classifications.append({
+                "review_id": c.get("review_id"),
+                "topic_ids": [topic.get("id")],
+                "sentiment": c.get("sentiment"),
+                "severity": c.get("severity"),
+                "confidence": c.get("confidence"),
+                "evidence_quote": c.get("evidence_quote"),
+            })
+
+    user = json.dumps({
+        "topics": [topic],
+        "classifications": topic_classifications,
+        "reviews": topic_reviews,
+    }, ensure_ascii=False)
+
+    result = await _call_json(system, user, max_tokens=4000)
+    findings = result.get("findings", [])
+    if not findings:
+        return None
+
+    finding = findings[0]
+    finding["topic"] = topic.get("name", finding.get("topic", ""))
+    finding["topic_id"] = topic.get("id", "")
+    # Enforce minimum evidence rule
+    if finding.get("support_count", 0) < 3:
+        finding["is_hypothesis"] = True
+    return finding
+
+
+async def evaluate_findings(
+    topics: List[Dict[str, Any]],
+    classifications: List[Dict[str, Any]],
+    reviews: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Evaluate evidence per topic to avoid massive single-call prompts."""
+    review_lookup = {r.get("review_id"): r for r in reviews if r.get("review_id")}
+    classification_lookup = {c.get("review_id"): c for c in classifications if c.get("review_id")}
+
+    topic_review_map: Dict[str, List[Dict[str, Any]]] = {t.get("id"): [] for t in topics if t.get("id")}
+    for c in classifications:
+        review_id = c.get("review_id")
+        r = review_lookup.get(review_id)
+        if not r:
+            continue
+        for tid in c.get("topic_ids", []):
+            if tid in topic_review_map and r not in topic_review_map[tid]:
+                topic_review_map[tid].append(r)
+
+    findings: List[Dict[str, Any]] = []
+    for topic in topics:
+        topic_reviews = topic_review_map.get(topic.get("id"), [])
+        finding = await _evaluate_single_topic(topic, topic_reviews, classification_lookup)
+        if finding:
+            findings.append(finding)
+
+    # Deduplicate and assign stable IDs
+    seen: set = set()
+    unique_findings: List[Dict[str, Any]] = []
+    for idx, f in enumerate(findings, start=1):
+        fid = f.get("finding_id") or f"F-{idx:03d}"
+        if fid not in seen:
+            seen.add(fid)
+            f["finding_id"] = fid
+            unique_findings.append(f)
+
+    return {"findings": unique_findings}
 
 
 async def plan_versions(user_goal: str, findings: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -202,20 +291,61 @@ async def generate_summary(prd: Dict[str, Any], findings: List[Dict[str, Any]], 
     return str(response.content)
 
 
+def _build_chat_context(context: Dict[str, Any], max_chars: int = 12000) -> str:
+    """Build a compact, human-readable context string for the chat agent."""
+    lines = [
+        f"App ID: {context.get('app_id', 'unknown')}",
+        f"Analysis Goal: {context.get('user_goal', '')}",
+        f"Review Count: {context.get('review_count', 0)}",
+        f"Summary: {context.get('summary', '')}",
+        "",
+        "Findings:",
+    ]
+    for f in context.get("findings", [])[:20]:
+        lines.append(
+            f"- {f.get('finding_id', 'F-???')}: {f.get('statement', '')} "
+            f"(confidence: {f.get('confidence', 0)}, support: {f.get('support_count', 0)}, "
+            f"hypothesis: {f.get('is_hypothesis', False)})"
+        )
+
+    lines.append("")
+    lines.append("PRD Requirements:")
+    prd = context.get("prd", {})
+    for vp in prd.get("version_plan", []):
+        version = vp.get("version", "")
+        for req in vp.get("requirements", []):
+            lines.append(
+                f"- {req.get('req_id', 'REQ-???')}: {req.get('title', '')} "
+                f"(priority: {req.get('priority', '')}, version: {version})"
+            )
+            desc = req.get("description", "")
+            if desc:
+                lines.append(f"  {desc[:200]}{'...' if len(desc) > 200 else ''}")
+
+    text = "\n".join(lines)
+    if len(text) > max_chars:
+        text = text[:max_chars].rsplit("\n", 1)[0] + "\n...[context truncated]"
+    return text
+
+
 async def chat_with_context(messages: List[Dict[str, str]], context: Dict[str, Any]) -> str:
     system = (
         "You are an App Review Analysis Agent. Answer the user's question based ONLY on the provided analysis context. "
-        "The context includes app reviews, findings, PRD requirements, and test cases. "
-        "If the answer is not in the context, say so. Be concise. "
-        "When referencing requirements or findings, include their IDs."
+        "The context includes the app's analysis goal, review findings, PRD requirements, and version plans. "
+        "Be helpful and concise. If the answer is not in the context, say so clearly. "
+        "When referencing findings or requirements, include their IDs (e.g., F-001, REQ-1.1)."
     )
-    context_text = json.dumps(context, ensure_ascii=False, indent=2)[:12000]
+    context_text = _build_chat_context(context)
     langchain_messages = [SystemMessage(content=f"{system}\n\nContext:\n{context_text}")]
     for m in messages:
-        if m["role"] == "user":
-            langchain_messages.append(HumanMessage(content=m["content"]))
-        elif m["role"] == "assistant":
-            langchain_messages.append(SystemMessage(content=m["content"]))
+        role = m.get("role")
+        content = m.get("content", "")
+        if role == "user":
+            langchain_messages.append(HumanMessage(content=content))
+        elif role == "assistant":
+            langchain_messages.append(AIMessage(content=content))
+        elif role == "system":
+            langchain_messages.append(SystemMessage(content=content))
     llm = get_llm(temperature=0.3)
     response = await llm.ainvoke(langchain_messages, max_tokens=2000)
     return str(response.content)
