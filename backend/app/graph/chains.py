@@ -10,7 +10,11 @@ from app.config import get_settings
 
 # Batch size for review classification. Keep output JSON well below provider
 # completion token limits (DeepSeek/OpenAI json_object often caps at ~8k).
-CLASSIFY_BATCH_SIZE = 25
+CLASSIFY_BATCH_SIZE = 15
+
+# Truncate long review text before sending it to the classifier. This keeps both
+# the prompt and the model's per-review output within token limits.
+CLASSIFY_MAX_REVIEW_CHARS = 600
 
 
 def get_llm(temperature: Optional[float] = None) -> ChatOpenAI:
@@ -56,28 +60,49 @@ async def _call_json(system: str, user: str, max_tokens: int = 4000) -> Dict[str
     return json.loads(text)
 
 
-async def _classify_single_batch(reviews: List[Dict[str, Any]], user_goal: str, max_tokens: int = 4000) -> Dict[str, Any]:
+def _truncate_review_for_classify(review: Dict[str, Any]) -> Dict[str, Any]:
+    """Return a copy of the review with text truncated for classification."""
+    truncated = dict(review)
+    text = truncated.get("text", "")
+    if len(text) > CLASSIFY_MAX_REVIEW_CHARS:
+        truncated["text"] = text[:CLASSIFY_MAX_REVIEW_CHARS].rsplit(" ", 1)[0] + "..."
+    # Also truncate title if needed
+    title = truncated.get("title", "")
+    if len(title) > 200:
+        truncated["title"] = title[:200].rsplit(" ", 1)[0] + "..."
+    return truncated
+
+
+async def _classify_single_batch(reviews: List[Dict[str, Any]], user_goal: str, max_tokens: int = 3500) -> Dict[str, Any]:
     """Classify a small batch of reviews. Output size is bounded by batch size."""
     system = _load_prompt("classify_v1.0.txt")
+    reviews = [_truncate_review_for_classify(r) for r in reviews]
     user = json.dumps({"analysis_goal": user_goal, "reviews": reviews}, ensure_ascii=False)
     return await _call_json(system, user, max_tokens=max_tokens)
+
+
+def _is_length_or_truncation_error(error: Exception) -> bool:
+    """Detect errors caused by the response hitting token/context limits."""
+    error_text = str(error).lower()
+    length_keywords = ["length", "token", "maximum context", "too long", "truncate", "context length"]
+    if any(keyword in error_text for keyword in length_keywords):
+        return True
+    # Truncated JSON outputs also commonly fail here
+    if isinstance(error, json.JSONDecodeError):
+        return True
+    return False
 
 
 async def _classify_batch_with_retry(
     reviews: List[Dict[str, Any]],
     user_goal: str,
-    min_batch_size: int = 5,
+    min_batch_size: int = 3,
 ) -> Dict[str, Any]:
     """Classify a batch, automatically shrinking it on token-length errors."""
     try:
         return await _classify_single_batch(reviews, user_goal)
     except Exception as e:
-        error_text = str(e).lower()
-        is_length_error = any(
-            keyword in error_text
-            for keyword in ["length", "token", "maximum context", "too long", "truncate"]
-        )
-        if not is_length_error or len(reviews) <= min_batch_size:
+        if not _is_length_or_truncation_error(e) or len(reviews) <= min_batch_size:
             raise
 
     # Split in half and retry recursively
@@ -103,6 +128,22 @@ async def _classify_batch_with_retry(
     return {"topics": merged_topics, "classifications": merged_classifications}
 
 
+async def _merge_topics_chunk(topics: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Call the LLM to merge a chunk of topics."""
+    merge_system = (
+        "You are a product analyst. You are given a list of topics extracted from app reviews.\n"
+        "Consolidate them by merging topics that are semantically the same or very similar.\n"
+        "Rules:\n"
+        "1. Keep the merged list concise and non-redundant.\n"
+        "2. Each output topic must have: id, name, description, keywords, source_topic_ids.\n"
+        "3. source_topic_ids must list ALL original topic ids that were merged into this topic.\n"
+        "4. Keep names under 6 words and descriptions under 20 words.\n"
+        "5. Output ONLY a single valid JSON object. No markdown, no explanations.\n"
+    )
+    merge_user = json.dumps({"topics": topics}, ensure_ascii=False)
+    return await _call_json(merge_system, merge_user, max_tokens=4000)
+
+
 async def _merge_batch_topics(batch_results: List[Dict[str, Any]]) -> tuple[List[Dict[str, Any]], Dict[str, str]]:
     """Merge topics discovered across batches into a global topic list.
 
@@ -118,17 +159,17 @@ async def _merge_batch_topics(batch_results: List[Dict[str, Any]]) -> tuple[List
     if not all_topics:
         return [], {}
 
-    merge_system = (
-        "You are a product analyst. You are given multiple topic lists extracted from different batches of the same app reviews.\n"
-        "Consolidate them by merging topics that are semantically the same or very similar.\n"
-        "Rules:\n"
-        "1. Keep the merged list concise and non-redundant.\n"
-        "2. Each output topic must have: id, name, description, keywords, source_topic_ids.\n"
-        "3. source_topic_ids must list ALL original topic ids that were merged into this topic.\n"
-        "4. Output ONLY a single valid JSON object. No markdown, no explanations.\n"
-    )
-    merge_user = json.dumps({"topics": all_topics}, ensure_ascii=False)
-    merged = await _call_json(merge_system, merge_user, max_tokens=8000)
+    # If there are too many topics, merge in chunks to avoid token limits
+    MERGE_CHUNK_SIZE = 60
+    if len(all_topics) <= MERGE_CHUNK_SIZE:
+        merged = await _merge_topics_chunk(all_topics)
+    else:
+        chunks = [all_topics[i:i + MERGE_CHUNK_SIZE] for i in range(0, len(all_topics), MERGE_CHUNK_SIZE)]
+        chunk_results = []
+        for chunk in chunks:
+            chunk_results.extend((await _merge_topics_chunk(chunk)).get("topics", []))
+        # Second pass to merge across chunks
+        merged = await _merge_topics_chunk(chunk_results)
 
     global_topics = []
     id_map: Dict[str, str] = {}

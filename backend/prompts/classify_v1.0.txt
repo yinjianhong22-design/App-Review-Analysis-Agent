@@ -15,11 +15,11 @@ Given a list of app reviews and an analysis goal, discover emergent topics and c
 
 ## Rules
 1. Derive topics from the reviews themselves. Do NOT use predefined categories.
-2. Each topic must have a clear name, description, and keywords extracted from review text. Keep names and descriptions SHORT.
+2. Each topic must have a clear name, description, and keywords extracted from review text. Keep names under 6 words and descriptions under 20 words.
 3. Each topic must have evidence from at least 2 reviews.
-4. Each review gets 1-3 topic_ids, a sentiment, a severity (1-5), a confidence score (0-1), and an evidence_quote.
-5. The evidence_quote must be a SHORT verbatim excerpt (under 12 words) from the review that justifies the classification.
-6. Output COMPACT JSON: avoid unnecessary whitespace, do not repeat text, keep descriptions concise.
+4. Each review gets 1-2 topic_ids, a sentiment, a severity (1-5), a confidence score (0-1), and an evidence_quote.
+5. The evidence_quote must be a SHORT verbatim excerpt (under 8 words) from the review that justifies the classification.
+6. Output COMPACT JSON: no unnecessary whitespace, no repeated text, no markdown, no explanations.
 7. Flag vague or unrelated reviews by assigning empty topic_ids and confidence near 0.
 8. Severity: 5 = critical blocker, 1 = minor suggestion.
 
