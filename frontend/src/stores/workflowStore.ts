@@ -1,6 +1,11 @@
 import { create } from 'zustand'
 import type { WorkflowStatus, AnalysisResult } from '../types'
 
+export interface ChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
 interface WorkflowState {
   jobId: string | null
   status: WorkflowStatus | null
@@ -9,12 +14,15 @@ interface WorkflowState {
   error: string | null
   pollInterval: number | null
   activeTab: string
-  selectedReviewId: string | null
+  chatOpen: boolean
+  chatMessages: ChatMessage[]
+  chatLoading: boolean
   setActiveTab: (tab: string) => void
-  setSelectedReviewId: (id: string | null) => void
+  setChatOpen: (open: boolean) => void
   startAnalysis: (appUrl: string, goal: string, filePath?: string) => Promise<void>
   fetchStatus: (jobId: string) => Promise<void>
   fetchResult: (jobId: string) => Promise<void>
+  sendChatMessage: (content: string) => Promise<void>
   stopPolling: () => void
   reset: () => void
 }
@@ -29,13 +37,15 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   error: null,
   pollInterval: null,
   activeTab: 'overview',
-  selectedReviewId: null,
+  chatOpen: false,
+  chatMessages: [],
+  chatLoading: false,
 
   setActiveTab: (tab) => set({ activeTab: tab }),
-  setSelectedReviewId: (id) => set({ selectedReviewId: id }),
+  setChatOpen: (open) => set({ chatOpen: open }),
 
   startAnalysis: async (appUrl, goal, filePath) => {
-    set({ isLoading: true, error: null, result: null, status: null })
+    set({ isLoading: true, error: null, result: null, status: null, chatMessages: [] })
     try {
       const payload: Record<string, unknown> = {
         analysis_goal: goal || 'Improve the app based on user feedback',
@@ -95,6 +105,25 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     }
   },
 
+  sendChatMessage: async (content: string) => {
+    const { jobId, chatMessages } = get()
+    if (!jobId) return
+    const newMessages = [...chatMessages, { role: 'user' as const, content }]
+    set({ chatMessages: newMessages, chatLoading: true })
+    try {
+      const res = await fetch(`${API_BASE}/api/chat/${jobId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: newMessages }),
+      })
+      if (!res.ok) throw new Error(await res.text())
+      const data = await res.json()
+      set({ chatMessages: [...newMessages, { role: 'assistant', content: data.answer }], chatLoading: false })
+    } catch (err) {
+      set({ chatMessages: [...newMessages, { role: 'assistant', content: `Error: ${err}` }], chatLoading: false })
+    }
+  },
+
   stopPolling: () => {
     const interval = get().pollInterval
     if (interval) {
@@ -112,7 +141,9 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       isLoading: false,
       error: null,
       activeTab: 'overview',
-      selectedReviewId: null,
+      chatOpen: false,
+      chatMessages: [],
+      chatLoading: false,
     })
   },
 }))

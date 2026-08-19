@@ -2,11 +2,11 @@ import os
 import uuid
 import asyncio
 from contextlib import asynccontextmanager
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse
 
 from app.config import get_settings
 from app.models.schemas import (
@@ -15,30 +15,30 @@ from app.models.schemas import (
     WorkflowStatusResponse,
     ExportRequest,
 )
-from app.workflow.engine import WorkflowEngine
+from app.graph.runner import get_runner
+from app.graph.state import PipelineState
+from app.graph import chains
 from app.services.export import ExportService
 from app.utils.cache import CacheManager
 
 
-# In-memory job registry (replace with DB in production)
 _jobs: Dict[str, Dict[str, Any]] = {}
-_engine: WorkflowEngine = WorkflowEngine()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # startup
     os.makedirs("data/cache", exist_ok=True)
+    os.makedirs("data/uploads", exist_ok=True)
+    os.makedirs("data/exports", exist_ok=True)
     os.makedirs("backend/sample_data", exist_ok=True)
     yield
-    # shutdown
     _jobs.clear()
 
 
 app = FastAPI(
     title="App Review Analysis Agent",
-    description="Transform App Store reviews into actionable PRDs, roadmaps, and test cases.",
-    version="0.1.0",
+    description="LangGraph-powered agent that transforms App Store reviews into PRDs and insights.",
+    version="0.2.0",
     lifespan=lifespan,
 )
 
@@ -56,36 +56,86 @@ async def health():
     return {"status": "ok"}
 
 
+STAGES = [
+    ("scope", "Scope defined"),
+    ("collect", "Reviews collected"),
+    ("clean", "Reviews cleaned"),
+    ("classify", "Topics discovered"),
+    ("evaluate", "Findings generated"),
+    ("plan", "Versions planned"),
+    ("prd", "PRD generated"),
+    ("validate", "Traceability validated"),
+    ("present", "Report ready"),
+]
+
+
+def _build_stages(state) -> List[Dict[str, Any]]:
+    if isinstance(state, dict):
+        state = PipelineState(**state)
+    stage_order = ["scope", "collect", "clean", "classify", "evaluate", "plan", "prd", "validate", "present"]
+    current_stage = state.stage or "pending"
+    current_idx = stage_order.index(current_stage) if current_stage in stage_order else -1
+    stages = []
+    for i, (sid, label) in enumerate(STAGES):
+        if i < current_idx:
+            status = "completed"
+        elif i == current_idx:
+            status = "running" if state.validation_status not in ("COMPLETED", "PASSED", "PARTIAL") else "completed"
+        else:
+            status = "pending"
+        stages.append({
+            "stage": sid,
+            "status": status,
+            "message": label,
+            "result": {},
+        })
+    if state.error:
+        stages[current_idx]["status"] = "failed"
+        stages[current_idx]["message"] = state.error
+    return stages
+
+
 @app.post("/api/analyze", response_model=StartAnalysisResponse)
 async def start_analysis(input_data: AnalysisInput, background_tasks: BackgroundTasks):
     job_id = str(uuid.uuid4())[:8]
-    _jobs[job_id] = {"state": None, "task": None}
-    background_tasks.add_task(_run_workflow, job_id, input_data)
+    _jobs[job_id] = {"state": None}
+
+    initial_state = PipelineState(
+        app_url=input_data.app_url,
+        app_id=input_data.app_id,
+        user_goal=input_data.analysis_goal or "Improve the app based on user feedback",
+    )
+    if input_data.uploaded_file:
+        initial_state.app_url = input_data.uploaded_file
+
+    background_tasks.add_task(_run_workflow, job_id, initial_state)
     return StartAnalysisResponse(job_id=job_id, status="started")
 
 
-async def _run_workflow(job_id: str, input_data: AnalysisInput):
+async def _run_workflow(job_id: str, initial_state: PipelineState):
+    runner = get_runner()
     try:
-        state = await _engine.run(job_id, input_data)
+        state = await runner.run(job_id, initial_state)
         _jobs[job_id]["state"] = state
     except Exception as e:
-        if job_id in _jobs:
-            _jobs[job_id]["error"] = str(e)
+        initial_state.error = str(e)
+        _jobs[job_id]["state"] = initial_state
 
 
 @app.get("/api/analyze/{job_id}/status", response_model=WorkflowStatusResponse)
 async def get_status(job_id: str):
-    state = _engine.get_state(job_id)
+    runner = get_runner()
+    state = runner.get_state(job_id)
     if state is None:
         raise HTTPException(status_code=404, detail="Job not found")
-    total = len(state.stages)
-    completed = sum(1 for s in state.stages if s.status == "completed")
-    progress_pct = (completed / total * 100) if total else 0
-    current = state.stages[state.current_stage_index] if state.current_stage_index < total else None
+    stages = _build_stages(state)
+    completed = sum(1 for s in stages if s["status"] == "completed")
+    progress_pct = (completed / len(stages) * 100) if stages else 0
+    current = state.stage
     return WorkflowStatusResponse(
         job_id=job_id,
-        current_stage=current.stage if current else None,
-        stages=state.stages,
+        current_stage=current,
+        stages=stages,
         progress_pct=progress_pct,
         error=state.error,
     )
@@ -93,9 +143,12 @@ async def get_status(job_id: str):
 
 @app.get("/api/analyze/{job_id}/result")
 async def get_result(job_id: str):
-    state = _engine.get_state(job_id)
+    runner = get_runner()
+    state = runner.get_state(job_id)
     if state is None:
         raise HTTPException(status_code=404, detail="Job not found")
+    if isinstance(state, dict):
+        return state
     return state.model_dump(mode="json")
 
 
@@ -113,11 +166,41 @@ async def upload_file(file: UploadFile = File(...)):
     return {"path": path, "filename": file.filename}
 
 
-@app.post("/api/export")
-async def export_report(req: ExportRequest):
-    state = _engine.get_state(req.job_id)
+@app.post("/api/chat/{job_id}")
+async def chat(job_id: str, payload: Dict[str, Any]):
+    runner = get_runner()
+    state = runner.get_state(job_id)
     if state is None:
         raise HTTPException(status_code=404, detail="Job not found")
+    if isinstance(state, dict):
+        state = PipelineState(**state)
+
+    messages = payload.get("messages", [])
+    if not messages:
+        raise HTTPException(status_code=400, detail="No messages provided")
+
+    context = {
+        "app_id": state.app_id,
+        "user_goal": state.user_goal,
+        "review_count": len(state.cleaned_reviews),
+        "findings": [f.model_dump(mode="json") for f in state.findings],
+        "version_plan": [v.model_dump(mode="json") for v in state.version_plan],
+        "prd": state.prd,
+        "summary": state.summary,
+    }
+
+    answer = await chains.chat_with_context(messages, context)
+    return {"answer": answer}
+
+
+@app.post("/api/export")
+async def export_report(req: ExportRequest):
+    runner = get_runner()
+    state = runner.get_state(req.job_id)
+    if state is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if isinstance(state, dict):
+        state = PipelineState(**state)
     exporter = ExportService()
     output_path = await exporter.export(state, req.format)
     if req.format == "markdown":
@@ -131,4 +214,4 @@ async def export_report(req: ExportRequest):
 
 @app.get("/api/sample-apps")
 async def list_sample_apps():
-    return {"apps": ["324684580", "284815942", "835198884"]}  # Sample App Store IDs
+    return {"apps": ["324684580", "284815942", "835198884"]}

@@ -5,22 +5,21 @@
 # Purpose: PRD generation with traceability
 
 ## System
-You are a senior product manager writing a Product Requirements Document.
+You are a senior product manager writing a concise Product Requirements Document.
 
 ## Critical Output Rule
-You must output ONLY a single valid JSON object. No markdown, no explanations, no thinking steps, no code fences, no preamble. The entire response must be parseable as JSON.
+You must output ONLY a single valid JSON object. No markdown, no explanations, no thinking steps, no code fences, no preamble. Use ASCII straight quotes only. Output compact JSON without unnecessary whitespace.
 
 ## Task
 Given an analysis goal, app_id, findings, and a version plan, generate a PRD.
 
 ## Rules
-1. Each requirement must link to at least one finding via source_findings.
+1. Each requirement must link to at least one finding via finding_ids.
 2. Each requirement must list source_reviews (the underlying evidence), capped at 5 review IDs.
-3. Provide 2-3 short acceptance criteria per requirement.
+3. Define clear scope_in (what is included) and scope_out (what is explicitly excluded) for each requirement.
 4. Priority must be one of: P0, P1, P2.
-5. Requirements should be specific, actionable, and testable.
+5. Requirements should be specific, actionable, and testable. Keep descriptions concise (2-3 sentences).
 6. Generate at most ONE requirement per finding.
-7. Keep descriptions concise (2-3 sentences). Output compact JSON without unnecessary whitespace.
 
 ## Output Format
 {
@@ -33,17 +32,15 @@ Given an analysis goal, app_id, findings, and a version plan, generate a PRD.
         "theme": "Subscription Clarity",
         "requirements": [
           {
-            "req_id": "REQ-1.1",
+            "req_id": "REQ-1",
             "title": "Clarify trial-to-paid transition",
             "description": "Before the trial ends, show a clear screen explaining the subscription price, billing date, and how to cancel.",
             "priority": "P0",
-            "source_findings": ["F-001"],
-            "source_reviews": ["R-12345678", "R-23456789", "R-34567890"],
-            "acceptance_criteria": [
-              "The trial end date and renewal price are visible on the subscription screen.",
-              "A 'Manage Subscription' link is reachable within two taps.",
-              "The price is shown in local currency before any confirmation."
-            ]
+            "target_version": "v1.1.0",
+            "scope_in": ["Trial end screen", "Price display", "Cancel link"],
+            "scope_out": ["Payment processing changes", "Email notifications"],
+            "finding_ids": ["F-001"],
+            "source_reviews": ["R-12345678", "R-23456789", "R-34567890"]
           }
         ]
       }

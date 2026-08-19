@@ -1,49 +1,28 @@
 import { useWorkflowStore } from '../stores/workflowStore'
-import ReviewExplorer from './ReviewExplorer'
-import FindingCard from './FindingCard'
-import TraceabilityGraph from './TraceabilityGraph'
-import ExportPanel from './ExportPanel'
-import ReactMarkdown from 'react-markdown'
+import ChatPanel from './ChatPanel'
 
 const TABS = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'reviews', label: 'Reviews' },
+  { id: 'overview', label: 'Summary' },
   { id: 'findings', label: 'Findings' },
   { id: 'prd', label: 'PRD' },
-  { id: 'tests', label: 'Test Cases' },
-  { id: 'trace', label: 'Traceability' },
+  { id: 'reviews', label: 'Reviews' },
 ]
 
 export default function ResultsDashboard() {
-  const { result, activeTab, setActiveTab, status } = useWorkflowStore()
+  const { result, activeTab, setActiveTab } = useWorkflowStore()
 
-  if (!result && !status) return null
   if (!result) {
     return (
       <div className="card text-slate-500 text-sm">
-        Analysis in progress... Results will appear here.
+        Start an analysis to see results here.
       </div>
     )
   }
 
-  const prdMarkdown = result.prd ? `# Product Requirements Document
-
-**App ID:** ${(result.prd.app_id as string) || result.input?.app_id || 'N/A'}
-**Goal:** ${(result.prd.analysis_goal as string) || result.input?.analysis_goal || 'N/A'}
-
-${(result.prd.version_plan as Array<Record<string, unknown>> || []).map((vp) => `## ${vp.version} — ${vp.theme}
-
-${(vp.requirements as Array<Record<string, unknown>> || []).map((req) => `### ${req.req_id}: ${req.title}
-Priority: **${req.priority}**
-
-${req.description}
-
-**Acceptance Criteria:**
-${(req.acceptance_criteria as string[] || []).map((ac) => `- ${ac}`).join('\n')}
-
-Sources: ${(req.source_findings as string[] || []).join(', ')} | ${(req.source_reviews as string[] || []).join(', ')}
-`).join('\n')}
-`).join('\n')}` : 'No PRD generated.'
+  const findings = result.findings || []
+  const versionPlan = result.prd?.version_plan || result.version_plan || []
+  const requirements = versionPlan.flatMap((vp: any) => vp.requirements || [])
+  const hypothesisCount = findings.filter((f: any) => f.is_hypothesis).length
 
   return (
     <div className="space-y-4">
@@ -64,70 +43,139 @@ Sources: ${(req.source_findings as string[] || []).join(', ')} | ${(req.source_r
       </div>
 
       {activeTab === 'overview' && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="card text-center">
-            <div className="text-2xl font-bold text-blue-600">{result.reviews?.length || 0}</div>
-            <div className="text-xs text-slate-500">Reviews</div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="lg:col-span-2 space-y-4">
+            <div className="card">
+              <h3 className="font-semibold mb-2">Analysis Summary</h3>
+              <div className="text-sm text-slate-700 whitespace-pre-wrap">
+                {result.summary || 'Summary will appear here after analysis completes.'}
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="card text-center">
+                <div className="text-2xl font-bold text-blue-600">{result.cleaned_reviews?.length || 0}</div>
+                <div className="text-xs text-slate-500">Reviews</div>
+              </div>
+              <div className="card text-center">
+                <div className="text-2xl font-bold text-purple-600">{findings.length}</div>
+                <div className="text-xs text-slate-500">Findings</div>
+              </div>
+              <div className="card text-center">
+                <div className="text-2xl font-bold text-green-600">{requirements.length}</div>
+                <div className="text-xs text-slate-500">Requirements</div>
+              </div>
+            </div>
+            {hypothesisCount > 0 && (
+              <div className="card bg-amber-50 border-amber-200">
+                <p className="text-sm text-amber-800">
+                  ⚠️ {hypothesisCount} finding(s) marked as hypothesis due to insufficient evidence.
+                </p>
+              </div>
+            )}
           </div>
-          <div className="card text-center">
-            <div className="text-2xl font-bold text-purple-600">{result.topics?.length || 0}</div>
-            <div className="text-xs text-slate-500">Topics</div>
-          </div>
-          <div className="card text-center">
-            <div className="text-2xl font-bold text-green-600">{result.findings?.length || 0}</div>
-            <div className="text-xs text-slate-500">Findings</div>
-          </div>
-          <div className="card text-center">
-            <div className="text-2xl font-bold text-amber-600">{result.test_cases?.length || 0}</div>
-            <div className="text-xs text-slate-500">Test Cases</div>
-          </div>
-          <div className="card col-span-full">
-            <h4 className="font-semibold mb-2">Validation</h4>
-            <p className="text-sm text-slate-700">
-              {result.validation_report?.valid ? '✅ Traceability valid' : '⚠️ Traceability issues detected'}
-              {result.validation_report?.issue_count ? ` — ${result.validation_report.issue_count} issue(s)` : ''}
-            </p>
-          </div>
-          <div className="col-span-full">
-            <ExportPanel />
+          <div className="lg:col-span-1">
+            <ChatPanel />
           </div>
         </div>
       )}
 
-      {activeTab === 'reviews' && <ReviewExplorer />}
-      {activeTab === 'findings' && <FindingCard />}
+      {activeTab === 'findings' && (
+        <div className="space-y-3">
+          <h3 className="font-semibold">Findings ({findings.length})</h3>
+          {findings.length === 0 && <p className="text-sm text-slate-500">No findings yet.</p>}
+          {findings.map((f: any) => (
+            <div key={f.finding_id} className="card border-l-4 border-l-blue-500">
+              <div className="flex justify-between items-start">
+                <h4 className="font-medium">{f.statement}</h4>
+                {f.is_hypothesis && (
+                  <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded">HYPOTHESIS</span>
+                )}
+              </div>
+              <div className="mt-2 text-sm text-slate-600">
+                <span className="mr-4">Topic: <b>{f.topic}</b></span>
+                <span className="mr-4">Confidence: <b>{Math.round((f.confidence || 0) * 100)}%</b></span>
+                <span>Evidence: <b>{f.support_count || f.evidence_ids?.length || 0} reviews</b></span>
+              </div>
+              {f.sample_quotes?.length > 0 && (
+                <div className="mt-2 text-xs text-slate-500 italic">
+                  “{f.sample_quotes[0]}”
+                </div>
+              )}
+              {f.conflict_notes?.length > 0 && (
+                <div className="mt-2 text-xs text-slate-500">
+                  Conflict: {f.conflict_notes.join('; ')}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
       {activeTab === 'prd' && (
-        <div className="card prose prose-sm max-w-none">
-          <ReactMarkdown>{prdMarkdown}</ReactMarkdown>
+        <div className="space-y-6">
+          {versionPlan.length === 0 && <p className="text-sm text-slate-500">No PRD generated yet.</p>}
+          {versionPlan.map((vp: any) => (
+            <div key={vp.version} className="card">
+              <h3 className="font-semibold text-lg mb-4">
+                {vp.version} — {vp.theme}
+              </h3>
+              <div className="space-y-4">
+                {(vp.requirements || []).map((req: any) => (
+                  <div key={req.req_id} className="border-l-4 border-l-green-500 pl-4">
+                    <div className="flex justify-between items-start">
+                      <h4 className="font-medium">{req.req_id}: {req.title}</h4>
+                      <span className="text-xs bg-slate-100 px-2 py-0.5 rounded">{req.priority}</span>
+                    </div>
+                    <p className="text-sm text-slate-700 mt-1">{req.description}</p>
+                    <div className="mt-2 text-xs text-slate-500">
+                      Source: {req.finding_ids?.join(', ') || 'N/A'}
+                    </div>
+                    {(req.scope_in?.length > 0 || req.scope_out?.length > 0) && (
+                      <div className="mt-2 grid grid-cols-2 gap-4 text-xs">
+                        <div>
+                          <span className="font-medium text-green-700">In Scope:</span>
+                          <ul className="list-disc ml-4">
+                            {req.scope_in?.map((s: string) => <li key={s}>{s}</li>)}
+                          </ul>
+                        </div>
+                        <div>
+                          <span className="font-medium text-red-700">Out of Scope:</span>
+                          <ul className="list-disc ml-4">
+                            {req.scope_out?.map((s: string) => <li key={s}>{s}</li>)}
+                          </ul>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       )}
-      {activeTab === 'tests' && (
-        <div className="overflow-auto">
-          <table className="min-w-full text-sm">
-            <thead className="bg-slate-100">
-              <tr>
-                <th className="px-3 py-2 text-left">TC ID</th>
-                <th className="px-3 py-2 text-left">Requirement</th>
-                <th className="px-3 py-2 text-left">Title</th>
-                <th className="px-3 py-2 text-left">Type</th>
-                <th className="px-3 py-2 text-left">Priority</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(result.test_cases || []).map((tc: any) => (
-                <tr key={tc.tc_id} className="border-b border-slate-100">
-                  <td className="px-3 py-2 font-mono text-xs">{tc.tc_id}</td>
-                  <td className="px-3 py-2 font-mono text-xs">{tc.req_id}</td>
-                  <td className="px-3 py-2">{tc.title}</td>
-                  <td className="px-3 py-2">{tc.test_type}</td>
-                  <td className="px-3 py-2">{tc.priority}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+
+      {activeTab === 'reviews' && (
+        <div className="space-y-3 max-h-[600px] overflow-y-auto">
+          <h3 className="font-semibold">Reviews ({result.cleaned_reviews?.length || 0})</h3>
+          {(result.cleaned_reviews || []).map((r: any) => (
+            <div key={r.review_id} className="card">
+              <div className="flex justify-between items-start">
+                <span className="text-xs font-mono text-slate-500">{r.review_id}</span>
+                <span className="text-sm">{'⭐'.repeat(r.rating)}</span>
+              </div>
+              <p className="text-sm font-medium mt-1">{r.title}</p>
+              <p className="text-sm text-slate-700 mt-1">{r.text}</p>
+              {r.topics?.length > 0 && (
+                <div className="flex gap-1 mt-2 flex-wrap">
+                  {r.topics.map((tid: string) => (
+                    <span key={tid} className="text-xs bg-slate-200 px-2 py-0.5 rounded">{tid}</span>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
-      {activeTab === 'trace' && <TraceabilityGraph />}
     </div>
   )
 }
