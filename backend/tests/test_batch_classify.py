@@ -187,9 +187,37 @@ async def test_chat_message_roles():
     chains.get_llm = original_get_llm
 
 
+async def test_classify_retry_on_length_error():
+    call_count = [0]
+
+    async def fake_classify_with_failure(batch, user_goal, max_tokens=4000):
+        call_count[0] += 1
+        # First call with full batch fails; subsequent calls succeed
+        if len(batch) > 10:
+            raise Exception("This model's maximum context length is 8192 tokens")
+        return await fake_classify(batch, user_goal, max_tokens)
+
+    original = chains._classify_single_batch
+    chains._classify_single_batch = fake_classify_with_failure
+
+    reviews = [
+        {"review_id": f"R-{i:03d}", "text": f"Review text number {i}" * 5, "rating": 3}
+        for i in range(24)
+    ]
+
+    result = await chains._classify_batch_with_retry(reviews, "Improve the app")
+    assert len(result["classifications"]) == 24, f"Expected 24 classifications, got {len(result['classifications'])}"
+    assert call_count[0] > 1, "Expected retry after length error"
+
+    print(f"Adaptive retry test passed ({call_count[0]} calls).")
+
+    chains._classify_single_batch = original
+
+
 async def main():
     await test_classify_batches()
     await test_evaluate_per_topic()
+    await test_classify_retry_on_length_error()
     await test_chat_message_roles()
 
 

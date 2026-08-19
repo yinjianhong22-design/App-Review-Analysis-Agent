@@ -10,7 +10,7 @@ from app.config import get_settings
 
 # Batch size for review classification. Keep output JSON well below provider
 # completion token limits (DeepSeek/OpenAI json_object often caps at ~8k).
-CLASSIFY_BATCH_SIZE = 50
+CLASSIFY_BATCH_SIZE = 25
 
 
 def get_llm(temperature: Optional[float] = None) -> ChatOpenAI:
@@ -56,11 +56,51 @@ async def _call_json(system: str, user: str, max_tokens: int = 4000) -> Dict[str
     return json.loads(text)
 
 
-async def _classify_single_batch(reviews: List[Dict[str, Any]], user_goal: str, max_tokens: int = 6000) -> Dict[str, Any]:
+async def _classify_single_batch(reviews: List[Dict[str, Any]], user_goal: str, max_tokens: int = 4000) -> Dict[str, Any]:
     """Classify a small batch of reviews. Output size is bounded by batch size."""
     system = _load_prompt("classify_v1.0.txt")
     user = json.dumps({"analysis_goal": user_goal, "reviews": reviews}, ensure_ascii=False)
     return await _call_json(system, user, max_tokens=max_tokens)
+
+
+async def _classify_batch_with_retry(
+    reviews: List[Dict[str, Any]],
+    user_goal: str,
+    min_batch_size: int = 5,
+) -> Dict[str, Any]:
+    """Classify a batch, automatically shrinking it on token-length errors."""
+    try:
+        return await _classify_single_batch(reviews, user_goal)
+    except Exception as e:
+        error_text = str(e).lower()
+        is_length_error = any(
+            keyword in error_text
+            for keyword in ["length", "token", "maximum context", "too long", "truncate"]
+        )
+        if not is_length_error or len(reviews) <= min_batch_size:
+            raise
+
+    # Split in half and retry recursively
+    mid = len(reviews) // 2
+    left = await _classify_batch_with_retry(reviews[:mid], user_goal, min_batch_size)
+    right = await _classify_batch_with_retry(reviews[mid:], user_goal, min_batch_size)
+
+    merged_topics = left.get("topics", []) + right.get("topics", [])
+    merged_classifications = left.get("classifications", []) + right.get("classifications", [])
+
+    # Re-index topic ids from the two halves to avoid collisions
+    left_ids = {t["id"] for t in left.get("topics", [])}
+    right_ids = {t["id"] for t in right.get("topics", [])}
+    if left_ids & right_ids:
+        right_topic_map: Dict[str, str] = {}
+        for i, t in enumerate(right.get("topics", []), start=1):
+            new_id = f"R{i:03d}-{t['id']}"
+            right_topic_map[t["id"]] = new_id
+            t["id"] = new_id
+        for c in right.get("classifications", []):
+            c["topic_ids"] = [right_topic_map.get(tid, tid) for tid in c.get("topic_ids", [])]
+
+    return {"topics": merged_topics, "classifications": merged_classifications}
 
 
 async def _merge_batch_topics(batch_results: List[Dict[str, Any]]) -> tuple[List[Dict[str, Any]], Dict[str, str]]:
@@ -139,12 +179,12 @@ async def classify_reviews(reviews: List[Dict[str, Any]], user_goal: str) -> Dic
     the maximum 500 App Store reviews at once.
     """
     if len(reviews) <= CLASSIFY_BATCH_SIZE:
-        return await _classify_single_batch(reviews, user_goal)
+        return await _classify_batch_with_retry(reviews, user_goal)
 
     batches = [reviews[i:i + CLASSIFY_BATCH_SIZE] for i in range(0, len(reviews), CLASSIFY_BATCH_SIZE)]
     batch_results: List[Dict[str, Any]] = []
     for idx, batch in enumerate(batches):
-        result = await _classify_single_batch(batch, user_goal)
+        result = await _classify_batch_with_retry(batch, user_goal)
         batch_results.append(result)
 
     global_topics, id_map = await _merge_batch_topics(batch_results)
