@@ -8,6 +8,10 @@ from pydantic import BaseModel
 
 from app.config import get_settings
 
+# Batch size for review classification. Keep output JSON well below provider
+# completion token limits (DeepSeek/OpenAI json_object often caps at ~8k).
+CLASSIFY_BATCH_SIZE = 50
+
 
 def get_llm(temperature: Optional[float] = None) -> ChatOpenAI:
     settings = get_settings()
@@ -52,10 +56,113 @@ async def _call_json(system: str, user: str, max_tokens: int = 4000) -> Dict[str
     return json.loads(text)
 
 
-async def classify_reviews(reviews: List[Dict[str, Any]], user_goal: str) -> Dict[str, Any]:
+async def _classify_single_batch(reviews: List[Dict[str, Any]], user_goal: str, max_tokens: int = 6000) -> Dict[str, Any]:
+    """Classify a small batch of reviews. Output size is bounded by batch size."""
     system = _load_prompt("classify_v1.0.txt")
     user = json.dumps({"analysis_goal": user_goal, "reviews": reviews}, ensure_ascii=False)
-    return await _call_json(system, user, max_tokens=8000)
+    return await _call_json(system, user, max_tokens=max_tokens)
+
+
+async def _merge_batch_topics(batch_results: List[Dict[str, Any]]) -> tuple[List[Dict[str, Any]], Dict[str, str]]:
+    """Merge topics discovered across batches into a global topic list.
+
+    Returns:
+        global_topics: list of consolidated topics
+        id_map: mapping from original batch topic id -> global topic id
+    """
+    all_topics = []
+    for result in batch_results:
+        for topic in result.get("topics", []):
+            all_topics.append(topic)
+
+    if not all_topics:
+        return [], {}
+
+    merge_system = (
+        "You are a product analyst. You are given multiple topic lists extracted from different batches of the same app reviews.\n"
+        "Consolidate them by merging topics that are semantically the same or very similar.\n"
+        "Rules:\n"
+        "1. Keep the merged list concise and non-redundant.\n"
+        "2. Each output topic must have: id, name, description, keywords, source_topic_ids.\n"
+        "3. source_topic_ids must list ALL original topic ids that were merged into this topic.\n"
+        "4. Output ONLY a single valid JSON object. No markdown, no explanations.\n"
+    )
+    merge_user = json.dumps({"topics": all_topics}, ensure_ascii=False)
+    merged = await _call_json(merge_system, merge_user, max_tokens=8000)
+
+    global_topics = []
+    id_map: Dict[str, str] = {}
+    used_source_ids = set()
+
+    for i, topic in enumerate(merged.get("topics", []), start=1):
+        global_id = topic.get("id") or f"T-{i:03d}"
+        # ensure unique global ids
+        if any(t["id"] == global_id for t in global_topics):
+            global_id = f"T-{i:03d}-{len(global_topics)}"
+        topic["id"] = global_id
+        global_topics.append(topic)
+        for source_id in topic.get("source_topic_ids", []):
+            id_map[str(source_id)] = global_id
+            used_source_ids.add(str(source_id))
+
+    # Any source topic that was not included in a merge group keeps its own id
+    for topic in all_topics:
+        tid = str(topic.get("id", ""))
+        if tid and tid not in used_source_ids:
+            global_topics.append({
+                "id": tid,
+                "name": topic.get("name", ""),
+                "description": topic.get("description", ""),
+                "keywords": topic.get("keywords", []),
+                "review_count": topic.get("review_count", 0),
+                "source_topic_ids": [tid],
+            })
+            id_map[tid] = tid
+
+    return global_topics, id_map
+
+
+def _remap_topic_ids(classification: Dict[str, Any], id_map: Dict[str, str]) -> Dict[str, Any]:
+    new_ids = []
+    for tid in classification.get("topic_ids", []):
+        mapped = id_map.get(str(tid))
+        if mapped and mapped not in new_ids:
+            new_ids.append(mapped)
+    classification["topic_ids"] = new_ids
+    return classification
+
+
+async def classify_reviews(reviews: List[Dict[str, Any]], user_goal: str) -> Dict[str, Any]:
+    """Classify reviews in batches and merge topics globally.
+
+    This avoids hitting the provider completion-token limit when analysing
+    the maximum 500 App Store reviews at once.
+    """
+    if len(reviews) <= CLASSIFY_BATCH_SIZE:
+        return await _classify_single_batch(reviews, user_goal)
+
+    batches = [reviews[i:i + CLASSIFY_BATCH_SIZE] for i in range(0, len(reviews), CLASSIFY_BATCH_SIZE)]
+    batch_results: List[Dict[str, Any]] = []
+    for idx, batch in enumerate(batches):
+        result = await _classify_single_batch(batch, user_goal)
+        batch_results.append(result)
+
+    global_topics, id_map = await _merge_batch_topics(batch_results)
+
+    all_classifications: List[Dict[str, Any]] = []
+    for result in batch_results:
+        for classification in result.get("classifications", []):
+            all_classifications.append(_remap_topic_ids(classification, id_map))
+
+    # Recalculate review_count per global topic from merged classifications
+    topic_counts: Dict[str, int] = {}
+    for classification in all_classifications:
+        for tid in classification.get("topic_ids", []):
+            topic_counts[tid] = topic_counts.get(tid, 0) + 1
+    for topic in global_topics:
+        topic["review_count"] = topic_counts.get(topic["id"], 0)
+
+    return {"topics": global_topics, "classifications": all_classifications}
 
 
 async def evaluate_findings(topics: List[Dict[str, Any]], classifications: List[Dict[str, Any]], reviews: List[Dict[str, Any]]) -> Dict[str, Any]:
