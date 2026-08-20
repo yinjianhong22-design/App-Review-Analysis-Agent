@@ -89,6 +89,8 @@ OPENAI_MODEL=gpt-4o-mini
 LLM_JSON_MODE=json_schema
 ```
 
+> **Model Recommendation:** 默认使用 `deepseek-chat`（非推理模型）。不建议使用 `deepseek-v4-pro` / `deepseek-reasoner` 等推理模型，因为它们的推理过程会占用大量输出 token，容易导致 `json_object` 响应被截断。
+>
 > **Note:** DeepSeek 目前对 OpenAI 的 `json_schema` strict 模式支持有限，因此默认使用 `json_object` 模式，并将 JSON Schema 约束注入到 System Prompt 中。
 
 ### 2. Start the backend

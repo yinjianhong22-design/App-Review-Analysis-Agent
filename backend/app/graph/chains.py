@@ -10,11 +10,11 @@ from app.config import get_settings
 
 # Batch size for review classification. Keep output JSON well below provider
 # completion token limits (DeepSeek/OpenAI json_object often caps at ~8k).
-CLASSIFY_BATCH_SIZE = 15
+CLASSIFY_BATCH_SIZE = 10
 
 # Truncate long review text before sending it to the classifier. This keeps both
 # the prompt and the model's per-review output within token limits.
-CLASSIFY_MAX_REVIEW_CHARS = 600
+CLASSIFY_MAX_REVIEW_CHARS = 500
 
 
 def get_llm(temperature: Optional[float] = None) -> ChatOpenAI:
