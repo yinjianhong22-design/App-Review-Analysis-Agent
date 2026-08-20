@@ -1,12 +1,13 @@
 import os
 import uuid
 import asyncio
+import json
 from contextlib import asynccontextmanager
 from typing import Dict, Any, List
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 
 from app.config import get_settings
 from app.models.schemas import (
@@ -20,6 +21,7 @@ from app.graph.state import PipelineState
 from app.graph import chains
 from app.services.export import ExportService
 from app.utils.cache import CacheManager
+from app.utils.events import event_emitter
 
 
 _jobs: Dict[str, Dict[str, Any]] = {}
@@ -151,6 +153,41 @@ async def get_result(job_id: str):
     if isinstance(state, dict):
         return state
     return state.model_dump(mode="json")
+
+
+@app.get("/api/analyze/{job_id}/events")
+async def events(job_id: str):
+    """Server-Sent Events stream for real-time workflow progress."""
+    runner = get_runner()
+    if runner.get_state(job_id) is None and job_id not in _jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    queue = event_emitter.subscribe(job_id)
+
+    async def event_generator():
+        try:
+            while True:
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=30.0)
+                    data = json.dumps(event, ensure_ascii=False)
+                    yield f"data: {data}\n\n"
+                    if event.get("type") in ("completed", "error"):
+                        break
+                except asyncio.TimeoutError:
+                    # Send keep-alive comment to keep connection open
+                    yield ":keep-alive\n\n"
+        finally:
+            event_emitter.unsubscribe(job_id)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @app.post("/api/upload")

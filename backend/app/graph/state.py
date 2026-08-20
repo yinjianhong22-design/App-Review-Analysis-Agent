@@ -63,6 +63,7 @@ class ValidationIssue(BaseModel):
 
 
 class PipelineState(BaseModel):
+    job_id: Optional[str] = None
     app_url: Optional[str] = None
     app_id: Optional[str] = None
     user_goal: str = "Improve the app based on user feedback"

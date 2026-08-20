@@ -213,22 +213,38 @@ def _remap_topic_ids(classification: Dict[str, Any], id_map: Dict[str, str]) -> 
     return classification
 
 
-async def classify_reviews(reviews: List[Dict[str, Any]], user_goal: str) -> Dict[str, Any]:
+async def classify_reviews(
+    reviews: List[Dict[str, Any]],
+    user_goal: str,
+    progress_callback=None,
+) -> Dict[str, Any]:
     """Classify reviews in batches and merge topics globally.
 
     This avoids hitting the provider completion-token limit when analysing
     the maximum 500 App Store reviews at once.
     """
     if len(reviews) <= CLASSIFY_BATCH_SIZE:
-        return await _classify_batch_with_retry(reviews, user_goal)
+        if progress_callback:
+            progress_callback(0.0, f"Classifying {len(reviews)} reviews...")
+        result = await _classify_batch_with_retry(reviews, user_goal)
+        if progress_callback:
+            progress_callback(1.0, f"Classified {len(reviews)} reviews")
+        return result
 
     batches = [reviews[i:i + CLASSIFY_BATCH_SIZE] for i in range(0, len(reviews), CLASSIFY_BATCH_SIZE)]
     batch_results: List[Dict[str, Any]] = []
     for idx, batch in enumerate(batches):
+        if progress_callback:
+            pct = idx / len(batches)
+            progress_callback(pct, f"Classifying batch {idx + 1}/{len(batches)}...")
         result = await _classify_batch_with_retry(batch, user_goal)
         batch_results.append(result)
 
+    if progress_callback:
+        progress_callback(0.95, "Merging topics across batches...")
     global_topics, id_map = await _merge_batch_topics(batch_results)
+    if progress_callback:
+        progress_callback(1.0, f"Classified {len(reviews)} reviews into {len(global_topics)} topics")
 
     all_classifications: List[Dict[str, Any]] = []
     for result in batch_results:

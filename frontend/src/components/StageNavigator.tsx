@@ -14,8 +14,10 @@ const STAGE_LABELS: Record<string, string> = {
 }
 
 export default function StageNavigator() {
-  const { status } = useWorkflowStore()
+  const { status, logs } = useWorkflowStore()
   if (!status) return null
+
+  const latestLog = logs[logs.length - 1]
 
   return (
     <div className="card">
@@ -29,6 +31,11 @@ export default function StageNavigator() {
           style={{ width: `${status.progress_pct}%` }}
         />
       </div>
+      {latestLog && (
+        <div className="mb-3 text-xs text-slate-600 bg-slate-50 p-2 rounded border border-slate-200 truncate" title={latestLog}>
+          {latestLog}
+        </div>
+      )}
       <ul className="space-y-2">
         {status.stages.map((s) => (
           <li key={s.stage} className="flex items-center justify-between text-sm">

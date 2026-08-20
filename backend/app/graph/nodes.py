@@ -4,10 +4,25 @@ from app.graph.state import PipelineState, ReviewItem, Finding, Requirement, Ver
 from app.graph import chains
 from app.services.data_collection import AppStoreRSSCollector, FileCollector
 from app.services.cleaning import CleaningService
+from app.utils.events import event_emitter
 
 
 def _log(state: PipelineState, message: str) -> None:
     state.logs.append(message)
+    event_emitter.emit(state.job_id, {"type": "log", "message": message})
+
+
+def _emit_stage(state: PipelineState, stage: str, status: str, progress_pct: float = 0.0, message: str = "") -> None:
+    event_emitter.emit(
+        state.job_id,
+        {
+            "type": "stage",
+            "stage": stage,
+            "status": status,
+            "progress_pct": progress_pct,
+            "message": message,
+        },
+    )
 
 
 def _review_to_item(r: Any) -> ReviewItem:
@@ -22,6 +37,7 @@ def _review_to_item(r: Any) -> ReviewItem:
 
 
 async def fetch_and_clean_node(state: PipelineState) -> Dict[str, Any]:
+    _emit_stage(state, "collect", "running", 0.0, "Fetching and cleaning reviews...")
     _log(state, "Fetching and cleaning reviews...")
     try:
         collector = AppStoreRSSCollector()
@@ -43,6 +59,7 @@ async def fetch_and_clean_node(state: PipelineState) -> Dict[str, Any]:
         cleaned = cleaner.clean(reviews)
         cleaned_items = [_review_to_item(r) for r in cleaned]
 
+        _emit_stage(state, "collect", "completed", 0.0, f"Collected {len(cleaned_items)} reviews")
         return {
             "stage": "collect",
             "app_id": app_id,
@@ -50,26 +67,35 @@ async def fetch_and_clean_node(state: PipelineState) -> Dict[str, Any]:
             "cleaned_reviews": cleaned_items,
         }
     except Exception as e:
+        _emit_stage(state, "collect", "failed", 0.0, str(e))
         return {"error": f"fetch_and_clean failed: {e}"}
 
 
 async def classify_node(state: PipelineState) -> Dict[str, Any]:
+    _emit_stage(state, "classify", "running", 0.0, "Classifying reviews into topics...")
     _log(state, "Classifying reviews into topics...")
     try:
         reviews = [r.model_dump(mode="json") for r in state.cleaned_reviews]
-        result = await chains.classify_reviews(reviews, state.user_goal)
+        result = await chains.classify_reviews(
+            reviews,
+            state.user_goal,
+            progress_callback=lambda pct, msg: _emit_stage(state, "classify", "running", pct, msg),
+        )
 
         # Attach topics to reviews
         topic_map = {c["review_id"]: c.get("topic_ids", []) for c in result.get("classifications", [])}
         for r in state.cleaned_reviews:
             r.topics = topic_map.get(r.review_id, [])
 
+        _emit_stage(state, "classify", "completed", 1.0, f"Discovered {len(result.get('topics', []))} topics")
         return {"stage": "classify", "topics": result.get("topics", [])}
     except Exception as e:
+        _emit_stage(state, "classify", "failed", 0.0, str(e))
         return {"error": f"classify failed: {e}"}
 
 
 async def evaluate_node(state: PipelineState) -> Dict[str, Any]:
+    _emit_stage(state, "evaluate", "running", 0.0, "Evaluating evidence and generating findings...")
     _log(state, "Evaluating evidence and generating findings...")
     try:
         reviews = [r.model_dump(mode="json") for r in state.cleaned_reviews]
@@ -91,34 +117,43 @@ async def evaluate_node(state: PipelineState) -> Dict[str, Any]:
             if f.support_count < 3:
                 f.is_hypothesis = True
 
+        _emit_stage(state, "evaluate", "completed", 1.0, f"Generated {len(findings)} findings")
         return {"stage": "evaluate", "findings": findings}
     except Exception as e:
+        _emit_stage(state, "evaluate", "failed", 0.0, str(e))
         return {"error": f"evaluate failed: {e}"}
 
 
 async def plan_node(state: PipelineState) -> Dict[str, Any]:
+    _emit_stage(state, "plan", "running", 0.0, "Planning versions...")
     _log(state, "Planning versions...")
     try:
         findings = [f.model_dump(mode="json") for f in state.findings]
         result = await chains.plan_versions(state.user_goal, findings)
         versions = [VersionPlan(**v) for v in result.get("versions", [])]
+        _emit_stage(state, "plan", "completed", 1.0, f"Planned {len(versions)} versions")
         return {"stage": "plan", "version_plan": versions}
     except Exception as e:
+        _emit_stage(state, "plan", "failed", 0.0, str(e))
         return {"error": f"plan failed: {e}"}
 
 
 async def prd_node(state: PipelineState) -> Dict[str, Any]:
+    _emit_stage(state, "prd", "running", 0.0, "Generating PRD...")
     _log(state, "Generating PRD...")
     try:
         findings = [f.model_dump(mode="json") for f in state.findings]
         version_plan = [v.model_dump(mode="json") for v in state.version_plan]
         result = await chains.generate_prd(state.user_goal, state.app_id or "unknown", findings, version_plan)
+        _emit_stage(state, "prd", "completed", 1.0, "PRD generated")
         return {"stage": "prd", "prd": result.get("prd", {})}
     except Exception as e:
+        _emit_stage(state, "prd", "failed", 0.0, str(e))
         return {"error": f"prd failed: {e}"}
 
 
 async def testgen_node(state: PipelineState) -> Dict[str, Any]:
+    _emit_stage(state, "testgen", "running", 0.0, "Generating test cases...")
     _log(state, "Generating test cases...")
     try:
         test_cases_data = await chains.generate_test_cases(
@@ -126,12 +161,15 @@ async def testgen_node(state: PipelineState) -> Dict[str, Any]:
             [f.model_dump(mode="json") for f in state.findings],
         )
         test_cases = [TestCase(**tc) for tc in test_cases_data]
+        _emit_stage(state, "testgen", "completed", 1.0, f"Generated {len(test_cases)} test cases")
         return {"stage": "testgen", "test_cases": test_cases}
     except Exception as e:
+        _emit_stage(state, "testgen", "failed", 0.0, str(e))
         return {"error": f"testgen failed: {e}"}
 
 
 async def verify_node(state: PipelineState) -> Dict[str, Any]:
+    _emit_stage(state, "validate", "running", 0.0, "Verifying traceability...")
     _log(state, "Verifying traceability...")
     issues: List[ValidationIssue] = []
     review_ids = {r.review_id for r in state.cleaned_reviews}
@@ -175,6 +213,7 @@ async def verify_node(state: PipelineState) -> Dict[str, Any]:
         state.retry_count += 1
     else:
         status = "PARTIAL"
+    _emit_stage(state, "validate", "completed", 1.0, f"Traceability {status.lower()}")
     return {
         "stage": "validate",
         "validation_issues": issues,
@@ -184,6 +223,7 @@ async def verify_node(state: PipelineState) -> Dict[str, Any]:
 
 
 async def present_node(state: PipelineState) -> Dict[str, Any]:
+    _emit_stage(state, "present", "running", 0.0, "Generating final summary...")
     _log(state, "Generating final summary...")
     try:
         summary = await chains.generate_summary(
@@ -191,10 +231,12 @@ async def present_node(state: PipelineState) -> Dict[str, Any]:
             [f.model_dump(mode="json") for f in state.findings],
             state.user_goal,
         )
+        _emit_stage(state, "present", "completed", 1.0, "Report ready")
         return {
             "stage": "present",
             "summary": summary,
             "validation_status": "COMPLETED",
         }
     except Exception as e:
+        _emit_stage(state, "present", "failed", 0.0, str(e))
         return {"error": f"present failed: {e}"}

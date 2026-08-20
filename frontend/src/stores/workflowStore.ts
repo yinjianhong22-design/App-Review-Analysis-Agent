@@ -13,15 +13,18 @@ interface WorkflowState {
   isLoading: boolean
   error: string | null
   pollInterval: number | null
+  eventSource: EventSource | null
   activeTab: string
   chatOpen: boolean
   chatMessages: ChatMessage[]
   chatLoading: boolean
+  logs: string[]
   setActiveTab: (tab: string) => void
   setChatOpen: (open: boolean) => void
   startAnalysis: (appUrl: string, goal: string, filePath?: string) => Promise<void>
   fetchStatus: (jobId: string) => Promise<void>
   fetchResult: (jobId: string) => Promise<void>
+  connectSSE: (jobId: string) => void
   sendChatMessage: (content: string) => Promise<void>
   exportReport: (format: string) => Promise<void>
   stopPolling: () => void
@@ -30,6 +33,55 @@ interface WorkflowState {
 
 const API_BASE = ''
 
+function buildStagesFromEvent(status: WorkflowStatus | null, event: any): WorkflowStatus {
+  if (!status) {
+    return {
+      job_id: event.job_id || '',
+      current_stage: event.stage,
+      stages: [],
+      progress_pct: event.progress_pct || 0,
+    }
+  }
+
+  const stages = [...status.stages]
+  const stageIndex = stages.findIndex((s) => s.stage === event.stage)
+
+  if (event.type === 'stage') {
+    const message = event.message || status.stages.find((s) => s.stage === event.stage)?.message || ''
+    const stageInfo = {
+      stage: event.stage,
+      status: event.status === 'running' ? ('running' as const) : event.status === 'completed' ? ('completed' as const) : event.status === 'failed' ? ('failed' as const) : ('pending' as const),
+      message,
+    }
+    if (stageIndex >= 0) {
+      stages[stageIndex] = stageInfo
+    } else {
+      stages.push(stageInfo)
+    }
+  }
+
+  // Compute overall progress based on completed stages + sub-stage progress
+  const stageOrder = ['scope', 'collect', 'clean', 'classify', 'evaluate', 'plan', 'prd', 'testgen', 'validate', 'present']
+  const currentIdx = stageOrder.indexOf(event.stage)
+  let progressPct = 0
+  if (currentIdx >= 0) {
+    const base = (currentIdx / stageOrder.length) * 100
+    const sub = event.type === 'stage' && event.status === 'running' ? (event.progress_pct || 0) * (100 / stageOrder.length) : 0
+    progressPct = Math.min(99, base + sub)
+  }
+  if (event.type === 'completed') {
+    progressPct = 100
+  }
+
+  return {
+    job_id: status.job_id,
+    current_stage: event.stage,
+    stages,
+    progress_pct: progressPct,
+    error: status.error,
+  }
+}
+
 export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   jobId: null,
   status: null,
@@ -37,16 +89,19 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   isLoading: false,
   error: null,
   pollInterval: null,
+  eventSource: null,
   activeTab: 'overview',
   chatOpen: false,
   chatMessages: [],
   chatLoading: false,
+  logs: [],
 
   setActiveTab: (tab) => set({ activeTab: tab }),
   setChatOpen: (open) => set({ chatOpen: open }),
 
   startAnalysis: async (appUrl, goal, filePath) => {
-    set({ isLoading: true, error: null, result: null, status: null, chatMessages: [] })
+    set({ isLoading: true, error: null, result: null, status: null, chatMessages: [], logs: [] })
+    get().stopPolling()
     try {
       const payload: Record<string, unknown> = {
         analysis_goal: goal || 'Improve the app based on user feedback',
@@ -67,13 +122,53 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       if (!res.ok) throw new Error(await res.text())
       const data = await res.json()
       set({ jobId: data.job_id })
-
-      const interval = window.setInterval(() => {
-        get().fetchStatus(data.job_id)
-      }, 1500)
-      set({ pollInterval: interval })
+      get().connectSSE(data.job_id)
     } catch (err) {
       set({ error: String(err), isLoading: false })
+    }
+  },
+
+  connectSSE: (jobId: string) => {
+    get().stopPolling()
+    const es = new EventSource(`${API_BASE}/api/analyze/${jobId}/events`)
+    set({ eventSource: es })
+
+    es.onmessage = (e) => {
+      try {
+        const event = JSON.parse(e.data)
+        if (event.type === 'log') {
+          set((state) => ({ logs: [...state.logs, event.message] }))
+          return
+        }
+
+        set((state) => ({
+          status: buildStagesFromEvent(state.status, event),
+        }))
+
+        if (event.type === 'completed' || event.type === 'error') {
+          es.close()
+          set({ eventSource: null })
+          if (event.type === 'completed') {
+            get().fetchResult(jobId)
+          }
+          if (event.type === 'error') {
+            set({ isLoading: false, error: event.error })
+            get().fetchResult(jobId)
+          }
+        }
+      } catch (err) {
+        console.error('Failed to parse SSE event:', err)
+      }
+    }
+
+    es.onerror = () => {
+      // SSE disconnected; fall back to polling
+      es.close()
+      set({ eventSource: null })
+      const interval = window.setInterval(() => {
+        get().fetchStatus(jobId)
+      }, 1500)
+      set({ pollInterval: interval })
     }
   },
 
@@ -156,6 +251,11 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       window.clearInterval(interval)
       set({ pollInterval: null })
     }
+    const es = get().eventSource
+    if (es) {
+      es.close()
+      set({ eventSource: null })
+    }
   },
 
   reset: () => {
@@ -170,6 +270,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       chatOpen: false,
       chatMessages: [],
       chatLoading: false,
+      logs: [],
     })
   },
 }))
