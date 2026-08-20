@@ -132,9 +132,9 @@ async def _merge_topics_chunk(topics: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Call the LLM to merge a chunk of topics."""
     merge_system = (
         "You are a product analyst. You are given a list of topics extracted from app reviews.\n"
-        "Consolidate them by merging topics that are semantically the same or very similar.\n"
+        "Consolidate them by merging ONLY topics that are clearly the same user issue or pain point.\n"
         "Rules:\n"
-        "1. Keep the merged list concise and non-redundant.\n"
+        "1. Be conservative: if two topics describe different problems, keep them separate.\n"
         "2. Each output topic must have: id, name, description, keywords, source_topic_ids.\n"
         "3. source_topic_ids must list ALL original topic ids that were merged into this topic.\n"
         "4. Keep names under 6 words and descriptions under 20 words.\n"

@@ -60,24 +60,11 @@ function buildStagesFromEvent(status: WorkflowStatus | null, event: any): Workfl
     }
   }
 
-  // Compute overall progress based on completed stages + sub-stage progress
-  const stageOrder = ['scope', 'collect', 'clean', 'classify', 'evaluate', 'plan', 'prd', 'testgen', 'validate', 'present']
-  const currentIdx = stageOrder.indexOf(event.stage)
-  let progressPct = 0
-  if (currentIdx >= 0) {
-    const base = (currentIdx / stageOrder.length) * 100
-    const sub = event.type === 'stage' && event.status === 'running' ? (event.progress_pct || 0) * (100 / stageOrder.length) : 0
-    progressPct = Math.min(99, base + sub)
-  }
-  if (event.type === 'completed') {
-    progressPct = 100
-  }
-
   return {
     job_id: status.job_id,
     current_stage: event.stage,
     stages,
-    progress_pct: progressPct,
+    progress_pct: event.progress_pct ?? status.progress_pct,
     error: status.error,
   }
 }

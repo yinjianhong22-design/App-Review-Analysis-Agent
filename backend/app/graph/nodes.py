@@ -12,14 +12,24 @@ def _log(state: PipelineState, message: str) -> None:
     event_emitter.emit(state.job_id, {"type": "log", "message": message})
 
 
+_STAGE_ORDER = ["scope", "collect", "clean", "classify", "evaluate", "plan", "prd", "testgen", "validate", "present"]
+
+
 def _emit_stage(state: PipelineState, stage: str, status: str, progress_pct: float = 0.0, message: str = "") -> None:
+    # progress_pct is sub-progress inside this stage (0.0-1.0). Convert to global 0-100.
+    stage_idx = _STAGE_ORDER.index(stage) if stage in _STAGE_ORDER else 0
+    global_pct = (stage_idx / len(_STAGE_ORDER)) * 100 + progress_pct * (100 / len(_STAGE_ORDER))
+    if status == "completed":
+        global_pct = ((stage_idx + 1) / len(_STAGE_ORDER)) * 100
+    if status == "failed":
+        global_pct = min(99, global_pct)
     event_emitter.emit(
         state.job_id,
         {
             "type": "stage",
             "stage": stage,
             "status": status,
-            "progress_pct": progress_pct,
+            "progress_pct": round(global_pct, 1),
             "message": message,
         },
     )
